@@ -1,5 +1,4 @@
 # pip install wfdb neurokit2 pandas numpy  (run once in your terminal/venv)
-
 import wfdb
 import pandas as pd
 import neurokit2 as nk
@@ -7,13 +6,10 @@ import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
 
-sddb_records = wfdb.get_record_list('sddb')
 nsrdb_records = wfdb.get_record_list('nsrdb')
-print(f"SDDB records ({len(sddb_records)}): {sddb_records}")
 print(f"NSRDB records ({len(nsrdb_records)}): {nsrdb_records}")
 
-NORMAL_BEAT_SYMBOLS = {'N', 'L', 'R', 'B', 'A', 'a', 'J', 'S', 'V', 'F',
-                       'e', 'j', 'n', 'E', '/', 'f', 'Q'}
+NORMAL_BEAT_SYMBOLS = {'N', 'L', 'R', 'B', 'A', 'a', 'J', 'S', 'V', 'F', 'e', 'j', 'n', 'E', '/', 'f', 'Q'}
 
 def get_rpeak_times(record_name, pn_dir):
     """Streams beat annotations for a record directly from PhysioNet and
@@ -24,7 +20,6 @@ def get_rpeak_times(record_name, pn_dir):
     peak_samples = ann.sample[is_beat]
     peak_times = peak_samples / fs
     return peak_samples, peak_times, fs
-
 
 WINDOW_SEC        = 5 * 60   # 5-minute analysis window (standard in HRV literature)
 STEP_SEC          = 60       # slide window by 1 minute
@@ -71,22 +66,7 @@ def extract_windows(peak_samples, peak_times, fs, record_id, mode):
                     pass  # skip windows where HRV computation fails (too irregular/short)
 
         win_start += STEP_SEC
-
     return rows
-
-# sddb_feature_frames = []
-# print("Extracting SDDB windows...")
-# for rec in sddb_records:
-#     try:
-#         peak_samples, peak_times, fs = get_rpeak_times(rec, pn_dir='sddb/1.0.0')
-#         rows = extract_windows(peak_samples, peak_times, fs, record_id=f"sddb_{rec}", mode='sddb')
-#         sddb_feature_frames.extend(rows)
-#         print(f"sddb/{rec}: {len(rows)} labeled windows")
-#     except Exception as e:
-#         print(f"sddb/{rec}: skipped ({e})")
-
-# sddb_df = pd.concat(sddb_feature_frames, ignore_index=True) if sddb_feature_frames else pd.DataFrame()
-# print("SDDB windows:", sddb_df.shape)
 
 NSRDB_SUBSAMPLE_STEP = 30  # keep every 30th window (~30 min apart) so long healthy
                            # recordings don't swamp the dataset with redundant negatives
@@ -104,6 +84,10 @@ for rec in nsrdb_records:
         print(f"nsrdb/{rec}: skipped ({e})")
 
 nsrdb_df = pd.concat(nsrdb_feature_frames, ignore_index=True) if nsrdb_feature_frames else pd.DataFrame()
+print("NSRDB windows:", nsrdb_df.shape)
+
+
+srdb_df = pd.concat(nsrdb_feature_frames, ignore_index=True) if nsrdb_feature_frames else pd.DataFrame()
 print("NSRDB windows:", nsrdb_df.shape)
 
 nsrdb_df.to_csv('nsrdb_features_cache.csv', index=False)
