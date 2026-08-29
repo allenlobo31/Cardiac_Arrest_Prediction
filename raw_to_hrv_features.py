@@ -55,11 +55,14 @@ def r_peaks_to_features(r_peak_samples, sampling_rate, feature_columns_path="fea
     return hrv_df[keep_cols].reset_index(drop=True)
 
 
-def ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path="feature_columns.json"):
+def ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path="feature_columns.json",
+                            return_peaks=False):
     """
     ecg_signal     : 1D array-like of raw ECG voltage samples.
     sampling_rate  : the sampling rate (Hz) of ecg_signal.
     feature_columns_path : path to the feature_columns.json saved alongside the trained model.
+    return_peaks   : if True, also returns (cleaned_signal, r_peak_samples) so callers
+                      (e.g. the web UI) can plot the detected beats for a sanity check.
 
     Detects R-peaks automatically, then returns the same single-row HRV
     feature DataFrame as r_peaks_to_features().
@@ -71,7 +74,10 @@ def ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path="feat
     _, rpeaks_info = nk.ecg_peaks(ecg_cleaned, sampling_rate=sampling_rate)
     r_peak_samples = rpeaks_info["ECG_R_Peaks"]
 
-    return r_peaks_to_features(r_peak_samples, sampling_rate, feature_columns_path)
+    features = r_peaks_to_features(r_peak_samples, sampling_rate, feature_columns_path)
+    if return_peaks:
+        return features, ecg_cleaned, r_peak_samples
+    return features
 
 
 def predict_from_raw(r_peak_samples=None, ecg_signal=None, sampling_rate=None,

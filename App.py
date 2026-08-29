@@ -1,53 +1,53 @@
 """
-app.py — Flask API for the HRV cardiac-arrest-warning model.
-
-Accepts raw heartbeat data over HTTP, converts it to the same 90 HRV features
-the model was trained on, and returns a Normal / Pre-arrest prediction.
+app.py — Flask web app for the HRV cardiac-arrest-warning model.
 
 Run locally:
-    pip install flask joblib scikit-learn neurokit2 numpy pandas
+    pip install -r requirements.txt
     python app.py
-    # server starts on http://0.0.0.0:5000
+    # then open http://127.0.0.1:5000 in your browser
 
-Endpoints:
-    GET  /health          -> confirms the model artifacts loaded correctly
-    POST /predict         -> runs a prediction on raw heartbeat data
+WHAT THIS APP DOES
+-------------------
+1. Shows a web page with a form to upload an image of an ECG waveform plot
+   (a clean digital chart/screenshot — not a photo of paper).
+2. Digitizes that image into a 1D numeric signal (image_to_signal.py).
+3. Converts the signal into the 90 HRV features the model was trained on
+   (raw_to_hrv_features.py — this runs neurokit2's R-peak detector).
+4. Scales the features and runs them through trained_model.pkl.
+5. Shows the prediction (Normal / Pre-arrest) plus a sanity-check plot of
+   the digitized signal with detected heartbeats marked, so you can see
+   whether the digitization actually worked before trusting the result.
 
-Request body for /predict (send ONE of r_peaks or ecg_signal, not both):
+IMPORTANT — read this before trusting a result:
+Turning a static image back into a signal is inherently a best-effort
+reconstruction, not a lab-grade digitization. The model also requires at
+least ~150 detected beats (several minutes of recording at a resting heart
+rate) to compute reliable HRV features — a short strip will be rejected.
+See image_to_signal.py for the exact assumptions and how to get a cleaner
+result (crop tightly to the waveform, use a high-contrast trace color).
 
-    Option A — you already have R-peak sample indices:
-    {
-        "sampling_rate": 250,
-        "r_peaks": [102, 312, 519, 731, ...]
-    }
-
-    Option B — you only have the raw ECG waveform:
-    {
-        "sampling_rate": 250,
-        "ecg_signal": [0.01, 0.02, -0.03, ...]
-    }
-
-Response:
-    {
-        "label": "Normal" | "Pre-arrest",
-        "probability": 0.24,
-        "threshold_used": 0.493,
-        "beats_detected": 380
-    }
-
-Error response (400):
-    {"error": "explanation of what was wrong with the request"}
+This app also still exposes the original JSON API for programmatic use:
+    GET  /health       -> confirms the model artifacts loaded correctly
+    POST /api/predict  -> same as before: send {"sampling_rate", "r_peaks"}
+                           or {"sampling_rate", "ecg_signal"} as JSON
 """
 
+import base64
+import io
 import json
 import os
 
+import matplotlib
+matplotlib.use("Agg")  # no display backend needed on a server
+import matplotlib.pyplot as plt
 import numpy as np
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 
+from image_to_signal import image_to_ecg_signal
 from raw_to_hrv_features import ecg_signal_to_features, r_peaks_to_features
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload limit
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "trained_model.pkl")
@@ -57,6 +57,8 @@ THRESHOLD_PATH = os.path.join(BASE_DIR, "chosen_threshold.json")
 
 MIN_SAMPLING_RATE = 50    # sanity bound — implausibly low for ECG/PPG
 MAX_SAMPLING_RATE = 2000  # sanity bound — implausibly high for a wearable
+MIN_DURATION_SECONDS = 5
+MAX_DURATION_SECONDS = 3600  # 1 hour
 
 # Model artifacts are loaded once at startup, not per-request — loading a
 # pickle on every call would be slow and pointless since nothing in it changes.
@@ -91,6 +93,111 @@ def load_artifacts():
     _threshold_model_name = threshold_info.get("model_name", "unknown")
 
 
+def _make_sanity_plot(cleaned_signal, r_peak_samples, sampling_rate):
+    """Renders a small PNG (as a base64 data URI) showing the digitized
+    signal with detected R-peaks marked, so the user can visually confirm
+    the digitization worked before trusting the prediction."""
+    t = np.arange(len(cleaned_signal)) / sampling_rate
+    fig, ax = plt.subplots(figsize=(9, 2.6), dpi=110)
+    ax.plot(t, cleaned_signal, linewidth=0.8, color="#2563eb")
+    peak_times = np.asarray(r_peak_samples) / sampling_rate
+    peak_values = np.asarray(cleaned_signal)[np.asarray(r_peak_samples, dtype=int)]
+    ax.scatter(peak_times, peak_values, color="#dc2626", s=14, zorder=3, label="detected beats")
+    ax.set_xlabel("time (s)")
+    ax.set_yticks([])
+    ax.legend(loc="upper right", fontsize=8, frameon=False)
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    encoded = base64.b64encode(buf.read()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def _run_prediction_pipeline(ecg_signal, sampling_rate):
+    """Shared core: signal + sampling_rate -> features -> scaled -> prediction.
+    Returns a dict ready to hand to the template, or raises ValueError with a
+    human-readable message on bad/unusable input (too few beats, etc.)."""
+    features, cleaned, r_peaks = ecg_signal_to_features(
+        ecg_signal, sampling_rate, FEATURE_COLUMNS_PATH, return_peaks=True
+    )
+    features_scaled = _scaler.transform(features)
+    proba = float(_model.predict_proba(features_scaled)[0, 1])
+    label = "Pre-arrest" if proba >= _threshold else "Normal"
+    plot_uri = _make_sanity_plot(cleaned, r_peaks, sampling_rate)
+
+    return {
+        "label": label,
+        "probability": round(proba, 4),
+        "threshold_used": _threshold,
+        "beats_detected": int(len(r_peaks)),
+        "sampling_rate_used": round(sampling_rate, 2),
+        "plot_uri": plot_uri,
+    }
+
+
+@app.route("/", methods=["GET"])
+def index():
+    return render_template("index.html", result=None, error=None)
+
+
+@app.route("/predict", methods=["POST"])
+def predict_from_image():
+    """Web-form endpoint: image upload + duration -> digitize -> predict."""
+    if _model is None:
+        return render_template("index.html", result=None,
+                                error="Model not loaded — check server startup logs.")
+
+    image_file = request.files.get("ecg_image")
+    duration_raw = request.form.get("duration_seconds", "").strip()
+
+    if image_file is None or image_file.filename == "":
+        return render_template("index.html", result=None,
+                                error="Please choose an image file to upload.")
+
+    try:
+        duration_seconds = float(duration_raw)
+    except ValueError:
+        return render_template("index.html", result=None,
+                                error="'Duration (seconds)' must be a number — "
+                                      "enter how many seconds of ECG the image spans.")
+
+    if not (MIN_DURATION_SECONDS <= duration_seconds <= MAX_DURATION_SECONDS):
+        return render_template("index.html", result=None,
+                                error=f"Duration looks implausible ({duration_seconds}s). "
+                                      f"Expected between {MIN_DURATION_SECONDS} and "
+                                      f"{MAX_DURATION_SECONDS} seconds.")
+
+    try:
+        image_bytes = image_file.read()
+        ecg_signal = image_to_ecg_signal(image_bytes)
+
+        sampling_rate = len(ecg_signal) / duration_seconds
+        if not (MIN_SAMPLING_RATE <= sampling_rate <= MAX_SAMPLING_RATE):
+            return render_template(
+                "index.html", result=None,
+                error=(f"The implied sampling rate ({sampling_rate:.1f} Hz, from "
+                       f"{len(ecg_signal)} pixel columns over {duration_seconds}s) is "
+                       f"outside a plausible range ({MIN_SAMPLING_RATE}-{MAX_SAMPLING_RATE} Hz). "
+                       f"Double-check the duration you entered, or use a wider/narrower image.")
+            )
+
+        result = _run_prediction_pipeline(ecg_signal, sampling_rate)
+        return render_template("index.html", result=result, error=None)
+
+    except ValueError as e:
+        # raised by image_to_signal.py or raw_to_hrv_features.py for things
+        # like "no trace detected" or "too few beats" — bad input, not a bug
+        return render_template("index.html", result=None, error=str(e))
+    except Exception:
+        app.logger.exception("Unexpected error during image-based prediction")
+        return render_template("index.html", result=None,
+                                error="Something went wrong processing that image. "
+                                      "Check the server logs for details.")
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """Simple readiness check — confirms the model artifacts are loaded and
@@ -104,8 +211,10 @@ def health():
     }), (200 if ok else 503)
 
 
-@app.route("/predict", methods=["POST"])
-def predict():
+@app.route("/api/predict", methods=["POST"])
+def api_predict():
+    """Original JSON API, unchanged — still available for programmatic use
+    (e.g. sending raw R-peaks or an ECG signal directly, no image involved)."""
     if _model is None:
         return jsonify({"error": "Model not loaded — check server startup logs."}), 503
 
@@ -117,7 +226,6 @@ def predict():
     r_peaks = body.get("r_peaks")
     ecg_signal = body.get("ecg_signal")
 
-    # --- input validation ---
     if sampling_rate is None:
         return jsonify({"error": "'sampling_rate' is required."}), 400
     try:
@@ -133,7 +241,6 @@ def predict():
     if (r_peaks is None) == (ecg_signal is None):
         return jsonify({"error": "Provide exactly one of 'r_peaks' or 'ecg_signal', not both/neither."}), 400
 
-    # --- convert raw data -> HRV features -> prediction ---
     try:
         if r_peaks is not None:
             if not isinstance(r_peaks, list) or len(r_peaks) == 0:
@@ -146,7 +253,7 @@ def predict():
                 return jsonify({"error": "'ecg_signal' must be a non-empty list of numeric samples."}), 400
             ecg_arr = np.asarray(ecg_signal, dtype=float)
             features = ecg_signal_to_features(ecg_arr, sampling_rate, FEATURE_COLUMNS_PATH)
-            beats_detected = None  # peak count only known internally to ecg_signal_to_features
+            beats_detected = None
 
         features_scaled = _scaler.transform(features)
         proba = float(_model.predict_proba(features_scaled)[0, 1])
@@ -163,12 +270,8 @@ def predict():
         return jsonify(response), 200
 
     except ValueError as e:
-        # raised by raw_to_hrv_features.py for things like "too few beats" —
-        # these are the user's input being unusable, not a server bug
         return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        # anything unexpected — log server-side detail, keep the client
-        # response generic so internals aren't leaked
+    except Exception:
         app.logger.exception("Unexpected error during prediction")
         return jsonify({"error": "Internal error while processing the request."}), 500
 

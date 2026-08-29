@@ -4,3 +4,5 @@ scikit-learn==1.6.1
 neurokit2
 numpy
 pandas
+pillow
+matplotlib

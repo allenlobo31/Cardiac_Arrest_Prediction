@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cardiac Arrest Warning — ECG Image Predictor</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #ffffff;
+    --accent: #2563eb;
+    --danger: #dc2626;
+    --safe: #16a34a;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
+    margin: 0;
+    padding: 32px 16px;
+    color: #111827;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-top: 0; margin-bottom: 24px; font-size: 0.95rem; }
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+    margin-bottom: 20px;
+  }
+  label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+  .hint { color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-bottom: 18px; }
+  input[type="file"], input[type="number"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.95rem;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+  }
+  button:hover { background: #1d4ed8; }
+  .error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+  }
+  .result-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: white;
+    margin-bottom: 12px;
+  }
+  .badge-normal { background: var(--safe); }
+  .badge-prearrest { background: var(--danger); }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+  .metric { background: #f8fafc; border-radius: 8px; padding: 10px 14px; }
+  .metric .value { font-size: 1.15rem; font-weight: 700; }
+  .metric .label { font-size: 0.78rem; color: var(--muted); }
+  img.plot { width: 100%; border-radius: 8px; border: 1px solid #e5e7eb; margin-top: 10px; }
+  .disclaimer { font-size: 0.78rem; color: var(--muted); margin-top: 10px; line-height: 1.4; }
+  footer { text-align: center; color: var(--muted); font-size: 0.78rem; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Cardiac Arrest Warning — HRV Predictor</h1>
+  <p class="subtitle">Upload a screenshot/plot of an ECG waveform. It gets digitized into a signal, converted into HRV features, and run through the trained model.</p>
+
+  {% if error %}
+    <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <div class="card">
+    <form action="/predict" method="post" enctype="multipart/form-data">
+      <label for="ecg_image">ECG waveform image</label>
+      <input type="file" id="ecg_image" name="ecg_image" accept="image/*" required>
+      <p class="hint">A clean digital plot works best — a screenshot of a waveform chart, not a photo of paper. Crop out axis labels/titles if you can.</p>
+
+      <label for="duration_seconds">Duration shown in the image (seconds)</label>
+      <input type="number" id="duration_seconds" name="duration_seconds" min="5" max="3600" step="0.1" placeholder="e.g. 180" required>
+      <p class="hint">How many seconds of ECG the image spans, left edge to right edge. This needs at least ~150 heartbeats total (a couple of minutes at a resting heart rate) for the model to compute reliable features — very short clips will be rejected.</p>
+
+      <button type="submit">Analyze ECG image</button>
+    </form>
+  </div>
+
+  {% if result %}
+  <div class="card">
+    {% if result.label == "Pre-arrest" %}
+      <span class="result-badge badge-prearrest">⚠ Pre-arrest signal</span>
+    {% else %}
+      <span class="result-badge badge-normal">✓ Normal</span>
+    {% endif %}
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="value">{{ "%.1f"|format(result.probability * 100) }}%</div>
+        <div class="label">predicted probability</div>
+      </div>
+      <div class="metric">
+        <div class="value">{{ result.threshold_used }}</div>
+        <div class="label">decision threshold</div>
+      </div>
+      <div class="metric">
+        <div class="value">{{ result.beats_detected }}</div>
+        <div class="label">beats detected</div>
+      </div>
+      <div class="metric">
+        <div class="value">{{ result.sampling_rate_used }} Hz</div>
+        <div class="label">implied sampling rate</div>
+      </div>
+    </div>
+
+    <img class="plot" src="{{ result.plot_uri }}" alt="Digitized signal with detected beats">
+    <p class="disclaimer">
+      This plot is the signal actually recovered from your image, with the beats the model used marked in red —
+      check it matches your original waveform before trusting the result above.
+      This tool is not a medical device and does not provide medical advice; digitizing a static image is an
+      approximation, not a calibrated ECG reading.
+    </p>
+  </div>
+  {% endif %}
+
+  <footer>HRV cardiac-arrest-warning model &middot; local demo</footer>
+</div>
+</body>
+</html>
