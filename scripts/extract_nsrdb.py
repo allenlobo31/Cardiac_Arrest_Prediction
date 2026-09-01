@@ -1,15 +1,28 @@
-# pip install wfdb neurokit2 pandas numpy  (run once in your terminal/venv)
-import wfdb
-import pandas as pd
+"""
+scripts/extract_nsrdb.py
+
+Extracts HRV feature windows from Normal Sinus Rhythm Database (NSRDB) on PhysioNet
+and caches the results in data/raw/nsrdb_features_cache.csv.
+"""
+
+from pathlib import Path
+import warnings
 import neurokit2 as nk
 import numpy as np
-import warnings
+import pandas as pd
+import wfdb
+
 warnings.filterwarnings("ignore")
 
-nsrdb_records = wfdb.get_record_list('nsrdb')
-print(f"NSRDB records ({len(nsrdb_records)}): {nsrdb_records}")
+BASE_DIR = Path(__file__).resolve().parent.parent
+OUTPUT_FILE = BASE_DIR / "data" / "raw" / "nsrdb_features_cache.csv"
 
 NORMAL_BEAT_SYMBOLS = {'N', 'L', 'R', 'B', 'A', 'a', 'J', 'S', 'V', 'F', 'e', 'j', 'n', 'E', '/', 'f', 'Q'}
+WINDOW_SEC = 5 * 60          # 5-minute analysis window (standard in HRV literature)
+STEP_SEC = 60              # slide window by 1 minute
+MIN_BEATS_PER_WINDOW = 150  # skip windows with too few detected beats (unreliable HRV)
+NSRDB_SUBSAMPLE_STEP = 30  # keep every 30th window (~30 min apart) so long healthy recordings don't swamp the dataset
+
 
 def get_rpeak_times(record_name, pn_dir):
     """Streams beat annotations for a record directly from PhysioNet and
@@ -21,21 +34,10 @@ def get_rpeak_times(record_name, pn_dir):
     peak_times = peak_samples / fs
     return peak_samples, peak_times, fs
 
-WINDOW_SEC        = 5 * 60   # 5-minute analysis window (standard in HRV literature)
-STEP_SEC          = 60       # slide window by 1 minute
-LEAD_TIME_SEC     = 30 * 60  # window ending within 30 min of recording end -> pre-arrest
-BASELINE_GAP_SEC  = 60 * 60  # window ending >60 min before recording end -> baseline/normal
-MIN_BEATS_PER_WINDOW = 150   # skip windows with too few detected beats (unreliable HRV)
 
-def extract_windows(peak_samples, peak_times, fs, record_id, mode):
-    """
-    mode='sddb'  -> windows near the recording end are labeled pre-arrest (1),
-                    windows well before the end are labeled baseline (0),
-                    windows in between are discarded (ambiguous buffer zone)
-    mode='nsrdb' -> every window is labeled normal (0)
-    """
+def extract_windows(peak_samples, peak_times, fs, record_id):
+    """Every NSRDB window is labeled normal (0)."""
     rows = []
-    record_end = peak_times[-1]
     win_start = peak_times[0]
 
     while win_start + WINDOW_SEC <= peak_times[-1]:
@@ -44,50 +46,41 @@ def extract_windows(peak_samples, peak_times, fs, record_id, mode):
         win_peaks = peak_samples[mask]
 
         if len(win_peaks) >= MIN_BEATS_PER_WINDOW:
-            if mode == 'sddb':
-                time_to_end = record_end - win_end
-                if time_to_end <= LEAD_TIME_SEC:
-                    label = 1
-                elif time_to_end >= BASELINE_GAP_SEC:
-                    label = 0
-                else:
-                    label = None
-            else:
-                label = 0
-
-            if label is not None:
-                try:
-                    hrv = nk.hrv(win_peaks, sampling_rate=fs, show=False)
-                    hrv['record_id'] = record_id
-                    hrv['window_end_sec'] = win_end
-                    hrv['label'] = label
-                    rows.append(hrv)
-                except Exception:
-                    pass  # skip windows where HRV computation fails (too irregular/short)
+            try:
+                hrv = nk.hrv(win_peaks, sampling_rate=fs, show=False)
+                hrv['record_id'] = record_id
+                hrv['window_end_sec'] = win_end
+                hrv['label'] = 0
+                rows.append(hrv)
+            except Exception:
+                pass  # skip windows where HRV computation fails (too irregular/short)
 
         win_start += STEP_SEC
     return rows
 
-NSRDB_SUBSAMPLE_STEP = 30  # keep every 30th window (~30 min apart) so long healthy
-                           # recordings don't swamp the dataset with redundant negatives
 
-nsrdb_feature_frames = []
-print("Extracting NSRDB windows...")
-for rec in nsrdb_records:
-    try:
-        peak_samples, peak_times, fs = get_rpeak_times(rec, pn_dir='nsrdb/1.0.0')
-        rows = extract_windows(peak_samples, peak_times, fs, record_id=f"nsrdb_{rec}", mode='nsrdb')
-        rows = rows[::NSRDB_SUBSAMPLE_STEP]
-        nsrdb_feature_frames.extend(rows)
-        print(f"nsrdb/{rec}: {len(rows)} labeled windows kept")
-    except Exception as e:
-        print(f"nsrdb/{rec}: skipped ({e})")
+def run_extraction():
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    nsrdb_records = wfdb.get_record_list('nsrdb')
+    print(f"NSRDB records ({len(nsrdb_records)}): {nsrdb_records}")
 
-nsrdb_df = pd.concat(nsrdb_feature_frames, ignore_index=True) if nsrdb_feature_frames else pd.DataFrame()
-print("NSRDB windows:", nsrdb_df.shape)
+    nsrdb_feature_frames = []
+    print("Extracting NSRDB windows...")
+    for rec in nsrdb_records:
+        try:
+            peak_samples, peak_times, fs = get_rpeak_times(rec, pn_dir='nsrdb/1.0.0')
+            rows = extract_windows(peak_samples, peak_times, fs, record_id=f"nsrdb_{rec}")
+            rows = rows[::NSRDB_SUBSAMPLE_STEP]
+            nsrdb_feature_frames.extend(rows)
+            print(f"nsrdb/{rec}: {len(rows)} labeled windows kept")
+        except Exception as e:
+            print(f"nsrdb/{rec}: skipped ({e})")
+
+    nsrdb_df = pd.concat(nsrdb_feature_frames, ignore_index=True) if nsrdb_feature_frames else pd.DataFrame()
+    print("NSRDB windows:", nsrdb_df.shape)
+    nsrdb_df.to_csv(OUTPUT_FILE, index=False)
+    print(f"Saved NSRDB cache to {OUTPUT_FILE}")
 
 
-srdb_df = pd.concat(nsrdb_feature_frames, ignore_index=True) if nsrdb_feature_frames else pd.DataFrame()
-print("NSRDB windows:", nsrdb_df.shape)
-
-nsrdb_df.to_csv('nsrdb_features_cache.csv', index=False)
+if __name__ == "__main__":
+    run_extraction()

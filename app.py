@@ -43,17 +43,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from flask import Flask, jsonify, render_template, request
 
-from image_to_signal import image_to_ecg_signal
-from raw_to_hrv_features import ecg_signal_to_features, r_peaks_to_features
+from src.image_to_signal import image_to_ecg_signal
+from src.raw_to_hrv_features import ecg_signal_to_features, r_peaks_to_features
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload limit
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "trained_model.pkl")
-SCALER_PATH = os.path.join(BASE_DIR, "feature_scaler.pkl")
-FEATURE_COLUMNS_PATH = os.path.join(BASE_DIR, "feature_columns.json")
-THRESHOLD_PATH = os.path.join(BASE_DIR, "chosen_threshold.json")
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+MODEL_PATH = os.path.join(MODELS_DIR, "trained_model.pkl")
+SCALER_PATH = os.path.join(MODELS_DIR, "feature_scaler.pkl")
+FEATURE_COLUMNS_PATH = os.path.join(MODELS_DIR, "feature_columns.json")
+THRESHOLD_PATH = os.path.join(MODELS_DIR, "chosen_threshold.json")
 
 MIN_SAMPLING_RATE = 50    # sanity bound — implausibly low for ECG/PPG
 MAX_SAMPLING_RATE = 2000  # sanity bound — implausibly high for a wearable
@@ -82,7 +83,7 @@ def load_artifacts():
         if not os.path.exists(path):
             raise FileNotFoundError(
                 f"Required model artifact '{name}' not found at {path}. "
-                f"Make sure it's in the same folder as app.py."
+                f"Make sure it's in the 'models' folder."
             )
 
     _model = joblib.load(MODEL_PATH)

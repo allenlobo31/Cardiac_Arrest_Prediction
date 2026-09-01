@@ -14,14 +14,21 @@ model.predict_proba().
 """
 
 import json
+import os
 import numpy as np
 import pandas as pd
 import neurokit2 as nk
 
 MIN_BEATS_REQUIRED = 150  # matches MIN_BEATS_PER_WINDOW used when the training data was built
 
+_DEFAULT_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
+_DEFAULT_FEATURE_COLUMNS = os.path.join(_DEFAULT_MODELS_DIR, "feature_columns.json")
+_DEFAULT_MODEL = os.path.join(_DEFAULT_MODELS_DIR, "trained_model.pkl")
+_DEFAULT_SCALER = os.path.join(_DEFAULT_MODELS_DIR, "feature_scaler.pkl")
+_DEFAULT_THRESHOLD = os.path.join(_DEFAULT_MODELS_DIR, "chosen_threshold.json")
 
-def r_peaks_to_features(r_peak_samples, sampling_rate, feature_columns_path="feature_columns.json"):
+
+def r_peaks_to_features(r_peak_samples, sampling_rate, feature_columns_path=_DEFAULT_FEATURE_COLUMNS):
     """
     r_peak_samples : array-like of R-peak locations, in SAMPLES (not seconds).
                       e.g. if your peaks are in seconds, multiply by sampling_rate first.
@@ -55,7 +62,7 @@ def r_peaks_to_features(r_peak_samples, sampling_rate, feature_columns_path="fea
     return hrv_df[keep_cols].reset_index(drop=True)
 
 
-def ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path="feature_columns.json",
+def ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path=_DEFAULT_FEATURE_COLUMNS,
                             return_peaks=False):
     """
     ecg_signal     : 1D array-like of raw ECG voltage samples.
@@ -81,9 +88,9 @@ def ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path="feat
 
 
 def predict_from_raw(r_peak_samples=None, ecg_signal=None, sampling_rate=None,
-                      model_path="trained_model.pkl", scaler_path="feature_scaler.pkl",
-                      feature_columns_path="feature_columns.json",
-                      threshold_path="chosen_threshold.json"):
+                      model_path=_DEFAULT_MODEL, scaler_path=_DEFAULT_SCALER,
+                      feature_columns_path=_DEFAULT_FEATURE_COLUMNS,
+                      threshold_path=_DEFAULT_THRESHOLD):
     """
     Full end-to-end: raw R-peaks OR raw ECG signal -> HRV features -> scaled ->
     model prediction. Pass exactly one of r_peak_samples / ecg_signal.
@@ -122,7 +129,6 @@ if __name__ == "__main__":
     peak_times_sec = np.cumsum(rr_intervals_sec)
     peak_samples = (peak_times_sec * fs).astype(int)
 
-    feats = r_peaks_to_features(peak_samples, sampling_rate=fs,
-                                 feature_columns_path="feature_columns.json")
+    feats = r_peaks_to_features(peak_samples, sampling_rate=fs)
     print("Extracted feature row shape:", feats.shape)
     print(feats.iloc[0][["HRV_MeanNN", "HRV_SDNN", "HRV_RMSSD"]])

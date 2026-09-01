@@ -3,12 +3,15 @@ from pathlib import Path
 import pandas as pd
 
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
+RAW_DIR = BASE_DIR / "data" / "raw"
+PROCESSED_DIR = BASE_DIR / "data" / "processed"
+
 INPUT_FILES = (
-	BASE_DIR / "nsrdb_features_cache.csv",
-	BASE_DIR / "sddb_features_cache.csv",
+	RAW_DIR / "nsrdb_features_cache.csv",
+	RAW_DIR / "sddb_features_cache.csv",
 )
-OUTPUT_FILE = BASE_DIR / "hrv_features_dataset.csv"
+OUTPUT_FILE = PROCESSED_DIR / "hrv_features_dataset.csv"
 
 
 def combine_datasets() -> pd.DataFrame:
