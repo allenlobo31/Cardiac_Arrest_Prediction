@@ -30,3 +30,9 @@ Thumbs.db
 /data/ptb
 /data/staff3
 /data/fragment
+
+/processed_pred/prediction_dataset.csv
+/processed_pred/prediction_dataset.npz
+/processed_pred/prediction_features.csv
+/processed_pred/clean/cleaning_report.txt
+/processed_pred/clean/train_ready.csv
