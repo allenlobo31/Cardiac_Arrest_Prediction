@@ -23,3 +23,10 @@ ENV/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+/data/mitdb
+/data/vfdb
+/data/sddb
+/data/ptb
+/data/staff3
+/data/fragment
