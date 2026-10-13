@@ -31,6 +31,14 @@ Per record
     4. per window: HRV + ectopy features from the beat annotations, and
        (optionally) the band-passed, z-scored raw ECG at 250 Hz
 
+Beat TYPES
+    Ectopy features (n_ventricular, pvc_burden, max_consec_ventricular,
+    non_n_fraction) need beat-type symbols. Where beats come from an annotation
+    file with types (.atr / .ari / .ecg) they are computed as usual. Where the
+    beats were DETECTED from the signal (xqrs) or read from a machine .qrs file
+    (all beats typed "N", e.g. VFDB) the types are unknown, so these four
+    features are written as NaN (not 0): "not measured" is not "no ectopy".
+
 Outputs (in --out)
     prediction_features.csv   one row per window: metadata, label, features
     prediction_dataset.npz    X (raw ECG, unless --no-signal), y, features,
@@ -72,6 +80,8 @@ RHYTHM_TO_CLASS = {
     "VFIB": 1, "PM": 6,
     "N": 6, "NSR": 6, "NE": 6, "BBB": 6, "P": 6,
 }
+# annotation extensions that carry real beat TYPES (everything else = unknown types)
+TYPED_BEAT_EXTS = {"atr", "ari", "ecg"}
 MITDB_SAME_PATIENT = {"202": "201"}   # records 201/202 are the same patient
 
 
@@ -206,8 +216,9 @@ def max_run(mask):
     return best
 
 
-def hrv_features(bt, bs, ws, we, min_beats):
-    """HRV / ectopy features for beats inside [ws, we) seconds."""
+def hrv_features(bt, bs, ws, we, min_beats, typed=True):
+    """HRV / ectopy features for beats inside [ws, we) seconds.
+    typed=False -> beat types unknown: the 4 ectopy features are NaN."""
     i0, i1 = np.searchsorted(bt, ws), np.searchsorted(bt, we)
     t, sym = bt[i0:i1], bs[i0:i1]
     if len(t) < min_beats:
@@ -239,15 +250,20 @@ def hrv_features(bt, bs, ws, we, min_beats):
     lf, hf = band(0.04, 0.15), band(0.15, 0.40)
 
     vent = np.isin(sym, list(VENT_SYMBOLS))
+    if typed:
+        ectopy = dict(n_ventricular=int(vent.sum()), pvc_burden=float(vent.mean()),
+                      max_consec_ventricular=max_run(vent),
+                      non_n_fraction=float(np.mean(sym != "N")))
+    else:
+        ectopy = dict(n_ventricular=np.nan, pvc_burden=np.nan,
+                      max_consec_ventricular=np.nan, non_n_fraction=np.nan)
     return dict(
         n_beats=len(t), mean_rr=mean_rr, mean_hr=60.0 / mean_rr, sdnn=sdnn,
         rmssd=rmssd, sdsd=sdsd, pnn50=float(np.mean(np.abs(dr) > 0.05)),
         cv_rr=sdnn / mean_rr, min_rr=rr_ok.min(), max_rr=rr_ok.max(),
         rr_range=rr_ok.max() - rr_ok.min(), sd1=sd1, sd2=sd2, lf=lf, hf=hf,
         lf_hf=lf / hf if hf > 0 else np.nan,
-        n_ventricular=int(vent.sum()), pvc_burden=float(vent.mean()),
-        max_consec_ventricular=max_run(vent),
-        non_n_fraction=float(np.mean(sym != "N")),
+        **ectopy,
         premature_fraction=float(np.mean(rr_ok < 0.6 * np.median(rr_ok))),
     )
 
@@ -356,6 +372,7 @@ def process_record(source, base, rng, a):
         bt, bs, beat_ext = idx_q / fs, np.array(["N"] * len(idx_q)), "xqrs"
     else:
         bt, bs, beat_ext = beats
+    typed = beat_ext in TYPED_BEAT_EXTS
 
     cls = rhythm_class_array(ann, n_orig, n_new)
     note = ""
@@ -382,7 +399,7 @@ def process_record(source, base, rng, a):
     X, rows = [], []
     for i in idx:
         ws, we = starts[i] / TARGET_FS, ends[i] / TARGET_FS
-        f = hrv_features(bt, bs, ws, we, a.min_beats)
+        f = hrv_features(bt, bs, ws, we, a.min_beats, typed)
         if f is None:
             continue
         if x is not None:
@@ -398,7 +415,8 @@ def process_record(source, base, rng, a):
             split=split_of(group), orig_fs=fs, beat_src=beat_ext, **f))
     msg = (f"{len(events)} episodes, {int((status == 1).sum())} pos / "
            f"{int((status == 0).sum())} neg candidates, kept {len(rows)}"
-           f" (beats from .{beat_ext})" + note)
+           f" (beats from .{beat_ext}"
+           + ("" if typed else ", no beat types -> ectopy NaN") + ")" + note)
     return X, rows, msg
 
 
@@ -472,6 +490,10 @@ def main():
           + (f"   X shape: {save['X'].shape}" if X else "   (no raw signal)"))
     print("\nlabel by source:\n", pd.crosstab(meta.source, meta.label_prearrest))
     print("\nlabel by split:\n", pd.crosstab(meta.split, meta.label_prearrest))
+    n_untyped = int(meta["n_ventricular"].isna().sum())
+    print(f"\nwindows without beat types (ectopy features = NaN): {n_untyped}")
+    print(meta.assign(no_types=meta["n_ventricular"].isna())
+              .groupby("source").no_types.sum().to_string())
     n_ep = meta[meta.label_prearrest == 1].episode_id.nunique()
     print(f"\ndistinct pre-arrest episodes: {n_ep}")
     for s in ("train", "val", "test"):
