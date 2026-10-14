@@ -1,127 +1,283 @@
-# Pre-Cardiac Arrest Prediction System
+<div align="center">
 
-A machine learning system and Flask web application for early prediction of cardiac arrest events using Heart Rate Variability (HRV) feature analysis extracted from ECG signals.
+# Pre-Cardiac Arrest Prediction
 
----
+**ECG-derived HRV analysis with a local Flask prediction website**
 
-## Overview
+The original pipeline extracts HRV features from annotated ECG records, trains a Random Forest classifier, and predicts whether an input is `Normal` or `Pre-arrest`.
 
-This project provides an end-to-end pipeline to:
-1. **Digitize ECG Plot Images**: Transform static digital waveform plots into 1D time-series signals (`src/image_to_signal.py`).
-2. **Extract HRV Features**: Compute 90 standardized Heart Rate Variability (HRV) metrics across time, frequency, non-linear, and morphological domains (`src/raw_to_hrv_features.py`).
-3. **Predict Pre-Arrest Risk**: Predict probability of pre-cardiac arrest status using a trained classification model and tuned decision threshold (`models/trained_model.pkl`).
-4. **Interactive Web Interface**: Upload ECG images, inspect detected R-peaks on a visual sanity plot, and receive real-time risk predictions (`app.py`).
+</div>
 
----
+> **Important**
+>
+> This is a research and demonstration system, not a medical device. Its output must not be used for diagnosis or emergency decision-making.
 
-## Project Structure
+## Contents
 
-```
-ModelTrain/
-├── data/
-│   ├── raw/                  # Raw cached HRV features from PhysioNet databases
-│   │   ├── nsrdb_features_cache.csv
-│   │   └── sddb_features_cache.csv
-│   ├── processed/            # Combined & labeled training dataset
-│   │   └── hrv_features_dataset.csv
-│   └── samples/              # Sample feature rows for testing and evaluation
-│       └── sample_test_rows.csv
-├── models/                   # Serialized model artifacts and configuration
-│   ├── trained_model.pkl     # Trained Random Forest classifier
-│   ├── feature_scaler.pkl    # StandardScaler fitted on training features
-│   ├── feature_columns.json  # Ordered list of 90 HRV feature names
-│   └── chosen_threshold.json # Optimal classification decision threshold
-├── notebooks/                # Model exploration and training notebooks
-│   └── precardiacTrain.ipynb
-├── scripts/                  # Data extraction and preprocessing ETL scripts
-│   ├── combine_datasets.py   # Combines NSRDB and SDDB caches into final dataset
-│   ├── extract_nsrdb.py      # Extracts windows from PhysioNet NSRDB
-│   └── extract_sddb.py       # Extracts windows from PhysioNet SDDB
-├── src/                      # Core processing & feature extraction package
-│   ├── __init__.py
-│   ├── image_to_signal.py    # ECG image digitization logic
-│   └── raw_to_hrv_features.py# NeuroKit2-based R-peak & HRV feature extraction
-├── templates/
-│   └── index.html            # Web interface UI
-├── app.py                    # Flask application entry point
-├── .env.example              # Environment variables template
-├── .gitignore                # Git ignore rules
-└── requirements.txt          # Python dependencies
+- [Architecture](#architecture)
+- [Repository Layout](#repository-layout)
+- [Installation](#installation)
+- [Dataset Preparation](#dataset-preparation)
+- [HRV Features](#hrv-features)
+- [Training](#training)
+- [Run The Website](#run-the-website)
+- [JSON API](#json-api)
+- [Limitations](#limitations)
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A[PhysioNet NSRDB and SDDB records] --> B[Extract five-minute HRV windows]
+    B --> C[Detect annotated R-peaks<br/>Calculate HRV features with NeuroKit2<br/>Assign Normal and Pre-arrest labels]
+    C --> D[combine_datasets.py<br/>Remove duplicates<br/>Write hrv_features_dataset.csv]
+    D --> E[precardiacTrain.ipynb<br/>Compare classifiers<br/>Fit scaler and choose threshold]
+    E --> F[models/<br/>Random Forest<br/>Scaler, feature order, threshold]
+    F --> G[app.py Flask website]
+    G --> H[ECG image or JSON input]
+    H --> I[Digitize signal<br/>Detect R-peaks<br/>Build 90 HRV features]
+    I --> J[Scale features<br/>Predict probability<br/>Return Normal or Pre-arrest]
 ```
 
----
+## Repository Layout
 
-## Installation & Setup
+```text
+.
+|-- app.py                          # Original Flask application
+|-- requirements.txt                # Python dependencies
+|-- templates/index.html            # Website interface
+|-- src/
+|   |-- image_to_signal.py          # ECG plot image digitizer
+|   `-- raw_to_hrv_features.py      # HRV extraction and prediction helpers
+|-- scripts/
+|   |-- extract_nsrdb.py            # NSRDB feature extraction
+|   |-- extract_sddb.py             # SDDB feature extraction
+|   `-- combine_datasets.py         # Dataset combination
+|-- data/
+|   |-- raw/                        # Generated feature caches
+|   `-- processed/                  # Combined training dataset
+|-- models/                         # Saved model artifacts
+|-- notebooks/precardiacTrain.ipynb # Training and evaluation notebook
+`-- TestImages/                     # Local image samples, when available
+```
 
-### 1. Clone the Repository
+## Installation
+
+From the repository root:
+
 ```bash
-git clone https://github.com/allenlobo31/Cardiac_Arrest_Prediction.git
-cd Cardiac_Arrest_Prediction
-```
-
-### 2. Create and Activate a Virtual Environment
-```bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
-
-# Linux / macOS
 python3 -m venv venv
 source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-### 3. Install Dependencies
+On Windows:
+
+```powershell
+python -m venv venv
+venv\Scripts\activate
+python -m pip install -r requirements.txt
+```
+
+The project uses packages including Flask, NeuroKit2, WFDB, NumPy, pandas, scikit-learn, joblib, Pillow, and matplotlib. Use the virtual environment when running the project so the installed dependencies are available.
+
+## Dataset Preparation
+
+The original extraction scripts download and read the annotated records through WFDB and PhysioNet.
+
+### Extract NSRDB Features
+
 ```bash
-pip install -r requirements.txt
+python scripts/extract_nsrdb.py
 ```
 
----
+This writes `data/raw/nsrdb_features_cache.csv`. The script:
 
-## Running the Application
+- uses five-minute HRV windows with a one-minute step
+- keeps windows containing at least 150 beats
+- labels NSRDB windows as normal (`label = 0`)
+- subsamples the long normal recordings to reduce their dominance in the dataset
 
-Start the Flask web server:
+### Extract SDDB Features
+
+```bash
+python scripts/extract_sddb.py
+```
+
+This writes `data/raw/sddb_features_cache.csv`. SDDB windows are labeled as follows:
+
+- pre-arrest (`label = 1`) when the window ends within 30 minutes of the recording end
+- normal (`label = 0`) when the window ends at least 60 minutes before the recording end
+- discarded when they fall in the ambiguous 30-to-60-minute buffer
+
+The SDDB extraction also uses five-minute windows and requires at least 150 beats per window.
+
+### Combine The Feature Caches
+
+After both extraction commands finish:
+
+```bash
+python scripts/combine_datasets.py
+```
+
+The combined, de-duplicated dataset is written to:
+
+```text
+data/processed/hrv_features_dataset.csv
+```
+
+The extraction scripts access PhysioNet, so internet access is required when the records are not already available in the local WFDB cache.
+
+## HRV Features
+
+`src/raw_to_hrv_features.py` produces the exact 90-column feature vector expected by the saved model. The feature list and ordering are loaded from `models/feature_columns.json`.
+
+Features are generated from R-peak locations using `neurokit2.hrv`. The pipeline includes time-domain, frequency-domain, and nonlinear HRV measurements. The main inputs are:
+
+- R-peak sample positions and a sampling rate, or
+- a raw ECG signal and a sampling rate, from which R-peaks are detected automatically
+
+At least 150 detected beats are required for the old model's HRV calculation. Short or irregular recordings can be rejected when NeuroKit2 cannot calculate all expected columns.
+
+## Training
+
+Open the original training notebook:
+
+```bash
+jupyter notebook notebooks/precardiacTrain.ipynb
+```
+
+The notebook uses the combined CSV in `data/processed/hrv_features_dataset.csv` to train and evaluate the classifier. The original training workflow:
+
+1. Loads the combined HRV feature table and separates the `label` target from metadata.
+2. Uses the ordered feature list saved in `models/feature_columns.json`.
+3. Fits a `StandardScaler` and the classification model on the training data.
+4. Evaluates the model and selects a probability threshold for the pre-arrest label.
+5. Saves the model, scaler, feature order, and threshold under `models/`.
+
+The checked-in old artifacts contain:
+
+```text
+model: RandomForest
+feature columns: 90
+decision threshold: 0.49333333333333335
+```
+
+The threshold is stored in `models/chosen_threshold.json`, not hard-coded in the website.
+
+### Training Report Metadata
+
+The recorded outputs in `notebooks/precardiacTrain.ipynb` provide the following report details:
+
+| Item | Recorded value |
+| --- | --- |
+| Candidate input columns | 95 |
+| Features retained | 90 |
+| Training windows | 528 |
+| Held-out test windows | 182 |
+| Training patients | 18 |
+| Held-out test patients | 7 |
+| Cross-validation | 5-fold `StratifiedGroupKFold` |
+| Model ranking metric | Mean PR-AUC |
+| Target recall for threshold tuning | 0.70 |
+| Selected model | Random Forest |
+
+The model comparison recorded by the notebook was:
+
+| Model | Mean PR-AUC | Mean F1 |
+| --- | ---: | ---: |
+| Random Forest | 0.705166 | 0.418569 |
+| XGBoost | 0.698553 | 0.490121 |
+| Logistic Regression | 0.653660 | 0.547159 |
+| SVM with RBF kernel | 0.572064 | 0.481749 |
+
+Random Forest had the highest mean PR-AUC and was selected as the best model under that comparison criterion. The notebook's held-out test results at its tuned threshold of `0.177` were:
+
+| Metric | Score |
+| --- | ---: |
+| Accuracy | 0.538 |
+| Precision | 0.504 |
+| Recall | 0.694 |
+| F1 score | 0.584 |
+| ROC-AUC | 0.547 |
+| PR-AUC | 0.516 |
+
+These are results recorded in the notebook for its test split, not guarantees for new data. The deployed artifact currently stores a different threshold, `0.49333333333333335`, and `app.py` uses that value when it converts probability into `Normal` or `Pre-arrest`.
+
+## Run The Website
+
+With the virtual environment active and the old model artifacts present:
+
 ```bash
 python app.py
 ```
 
-Then open your browser and navigate to:
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
+
+At startup, `app.py` loads these files once:
+
+```text
+models/trained_model.pkl
+models/feature_scaler.pkl
+models/feature_columns.json
+models/chosen_threshold.json
 ```
-http://127.0.0.1:5000
+
+If one is missing, the application fails fast and reports the missing artifact.
+
+### Image Prediction Flow
+
+1. Upload a clean digital ECG plot or screenshot through the form.
+2. Enter the duration represented by the image, from 5 to 3,600 seconds.
+3. `src/image_to_signal.py` estimates one signal value per image column by separating the waveform from the background.
+4. The application derives the sampling rate as `image_width / duration_seconds` and accepts 50 to 2,000 Hz.
+5. NeuroKit2 cleans the recovered signal and detects R-peaks.
+6. The application converts the peaks into the 90 HRV features, scales them with the saved scaler, and calls the saved Random Forest model.
+7. The website compares the probability with the saved threshold and displays `Normal` or `Pre-arrest`.
+8. The result also includes the probability, threshold, detected beat count, implied sampling rate, and a sanity plot with detected beats marked in red.
+
+The upload limit is 16 MB. A clean digital plot with a plain background and a contrasting trace works best. The digitizer is heuristic: gridlines, labels, legends, paper photographs, cropping, and low contrast can distort the recovered signal.
+
+## JSON API
+
+### Health Check
+
+```bash
+curl http://127.0.0.1:5000/health
 ```
 
-### Using the Web UI
-1. Upload a clear digital screenshot or export of an ECG waveform.
-2. Enter the recording duration represented by the image (in seconds, e.g., `180` for 3 minutes).
-3. Submit the form to view the prediction (`Normal` vs. `Pre-arrest`), calculated probability, detected beat count, and a sanity check waveform plot.
+The response reports the readiness status, saved model name, and loaded threshold.
 
----
+### Prediction From R-Peaks
 
-## API Endpoints
+```bash
+curl -X POST http://127.0.0.1:5000/api/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sampling_rate": 250,
+    "r_peaks": [0, 210, 415, 625, 830]
+  }'
+```
 
-- `GET /health`: Healthcheck verifying model artifacts are loaded.
-- `POST /predict`: Web form submission endpoint for ECG image uploads.
-- `POST /api/predict`: Programmatic JSON API endpoint for raw signals or R-peak indices.
+### Prediction From An ECG Signal
 
-### Example JSON API Request:
+Replace `r_peaks` with a non-empty numeric `ecg_signal` list:
+
 ```json
-POST /api/predict
-Content-Type: application/json
-
 {
   "sampling_rate": 250,
-  "r_peaks": [0, 210, 415, 625, 830, ...]
+  "ecg_signal": [0.02, 0.04, 0.01]
 }
 ```
 
----
+The API accepts exactly one of `r_peaks` or `ecg_signal`. A successful response contains the predicted `label`, `probability`, and `threshold_used`; requests using `r_peaks` also report `beats_detected`.
 
-## Data Pipeline & Model Training
+## Limitations
 
-1. **Extraction (`scripts/`)**:
-   - `scripts/extract_nsrdb.py`: Extracts 5-minute sliding windows from the MIT-BIH Normal Sinus Rhythm Database (NSRDB).
-   - `scripts/extract_sddb.py`: Extracts 5-minute sliding windows from the Sudden Cardiac Death Holter Database (SDDB).
-   - `scripts/combine_datasets.py`: Combines and de-duplicates windows into `data/processed/hrv_features_dataset.csv`.
-2. **Training (`notebooks/precardiacTrain.ipynb`)**:
-   - Trains classification models with class-weight balancing.
-   - Tunes decision thresholds for target recall on the pre-arrest class.
-   - Exports serialized models and metadata to `models/`.
+- The model predicts from HRV features and does not diagnose cardiac arrest.
+- Static-image digitization is an approximation and does not recover calibrated voltage.
+- The image duration must be supplied accurately because it determines the implied sampling rate.
+- The model requires at least 150 beats and all expected HRV columns to be available.
+- The Flask development server is intended for local use, not production deployment.
+- The saved evaluation artifacts represent the training setup in this repository and do not guarantee performance on new data.
