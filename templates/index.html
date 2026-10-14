@@ -77,6 +77,37 @@
   .metric .label { font-size: 0.78rem; color: var(--muted); }
   img.plot { width: 100%; border-radius: 8px; border: 1px solid #e5e7eb; margin-top: 10px; }
   .disclaimer { font-size: 0.78rem; color: var(--muted); margin-top: 10px; line-height: 1.4; }
+  .result-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    background: rgba(15, 23, 42, 0.45);
+    overflow-y: auto;
+  }
+  .result-modal {
+    width: min(640px, 100%);
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    margin: auto;
+  }
+  .modal-actions { margin-top: 18px; }
+  .analyse-button { background: #0f766e; }
+  .analyse-button:hover { background: #115e59; }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
   footer { text-align: center; color: var(--muted); font-size: 0.78rem; margin-top: 24px; }
 </style>
 </head>
@@ -104,39 +135,45 @@
   </div>
 
   {% if result %}
-  <div class="card">
-    {% if result.label == "Pre-arrest" %}
-      <span class="result-badge badge-prearrest">⚠ Pre-arrest signal</span>
-    {% else %}
-      <span class="result-badge badge-normal">✓ Normal</span>
-    {% endif %}
+  <div class="result-overlay" role="presentation">
+    <section class="card result-modal" role="dialog" aria-modal="true" aria-labelledby="result-title">
+      <h2 id="result-title" class="sr-only">ECG analysis result</h2>
+      {% if result.label == "Pre-arrest" %}
+        <span class="result-badge badge-prearrest">⚠ Pre-arrest signal</span>
+      {% else %}
+        <span class="result-badge badge-normal">✓ Normal</span>
+      {% endif %}
 
-    <div class="metrics">
-      <div class="metric">
-        <div class="value">{{ "%.1f"|format(result.probability * 100) }}%</div>
-        <div class="label">predicted probability</div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="value">{{ "%.1f"|format(result.probability * 100) }}%</div>
+          <div class="label">predicted probability</div>
+        </div>
+        <div class="metric">
+          <div class="value">{{ result.threshold_used }}</div>
+          <div class="label">decision threshold</div>
+        </div>
+        <div class="metric">
+          <div class="value">{{ result.beats_detected }}</div>
+          <div class="label">beats detected</div>
+        </div>
+        <div class="metric">
+          <div class="value">{{ result.sampling_rate_used }} Hz</div>
+          <div class="label">implied sampling rate</div>
+        </div>
       </div>
-      <div class="metric">
-        <div class="value">{{ result.threshold_used }}</div>
-        <div class="label">decision threshold</div>
-      </div>
-      <div class="metric">
-        <div class="value">{{ result.beats_detected }}</div>
-        <div class="label">beats detected</div>
-      </div>
-      <div class="metric">
-        <div class="value">{{ result.sampling_rate_used }} Hz</div>
-        <div class="label">implied sampling rate</div>
-      </div>
-    </div>
 
-    <img class="plot" src="{{ result.plot_uri }}" alt="Digitized signal with detected beats">
-    <p class="disclaimer">
-      This plot is the signal actually recovered from your image, with the beats the model used marked in red —
-      check it matches your original waveform before trusting the result above.
-      This tool is not a medical device and does not provide medical advice; digitizing a static image is an
-      approximation, not a calibrated ECG reading.
-    </p>
+      <img class="plot" src="{{ result.plot_uri }}" alt="Digitized signal with detected beats">
+      <p class="disclaimer">
+        This plot is the signal actually recovered from your image, with the beats the model used marked in red —
+        check it matches your original waveform before trusting the result above.
+        This tool is not a medical device and does not provide medical advice; digitizing a static image is an
+        approximation, not a calibrated ECG reading.
+      </p>
+      <div class="modal-actions">
+        <button class="analyse-button" type="button" onclick="window.location.href='/'">Analyse image</button>
+      </div>
+    </section>
   </div>
   {% endif %}
 
