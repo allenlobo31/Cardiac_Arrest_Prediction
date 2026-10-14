@@ -31,7 +31,7 @@ flowchart TD
     A[PhysioNet NSRDB and SDDB records] --> B[Extract five-minute HRV windows]
     B --> C[Detect annotated R-peaks<br/>Calculate HRV features with NeuroKit2<br/>Assign Normal and Pre-arrest labels]
     C --> D[combine_datasets.py<br/>Remove duplicates<br/>Write hrv_features_dataset.csv]
-    D --> E[precardiacTrain.ipynb<br/>Compare classifiers<br/>Fit scaler and choose threshold]
+    D --> E[Stable.ipynb<br/>Compare classifiers<br/>Fit scaler and choose threshold]
     E --> F[models/<br/>Random Forest<br/>Scaler, feature order, threshold]
     F --> G[app.py Flask website]
     G --> H[ECG image or JSON input]
@@ -57,7 +57,7 @@ flowchart TD
 |   |-- raw/                        # Generated feature caches
 |   `-- processed/                  # Combined training dataset
 |-- models/                         # Saved model artifacts
-|-- notebooks/precardiacTrain.ipynb # Training and evaluation notebook
+|-- notebooks/Stable.ipynb          # Stable training and evaluation notebook
 `-- TestImages/                     # Local image samples, when available
 ```
 
@@ -142,24 +142,26 @@ At least 150 detected beats are required for the old model's HRV calculation. Sh
 
 ## Training
 
-Open the original training notebook:
+Open the stable training notebook:
 
 ```bash
-jupyter notebook notebooks/precardiacTrain.ipynb
+jupyter notebook notebooks/Stable.ipynb
 ```
 
-The notebook uses the combined CSV in `data/processed/hrv_features_dataset.csv` to train and evaluate the classifier. The original training workflow:
+The notebook uses the combined CSV in `data/processed/hrv_features_dataset.csv` to train and evaluate the classifier. The stable training workflow:
 
-1. Loads the combined HRV feature table and separates the `label` target from metadata.
-2. Uses the ordered feature list saved in `models/feature_columns.json`.
-3. Fits a `StandardScaler` and the classification model on the training data.
-4. Evaluates the model and selects a probability threshold for the pre-arrest label.
-5. Saves the model, scaler, feature order, and threshold under `models/`.
+1. Loads 12,209 labeled windows and separates `label` from `record_id` and `window_end_sec`.
+2. Removes features with 20% or more missing values, retaining 90 of 95 candidate features.
+3. Undersamples the Normal class to match the 355 Pre-arrest windows, producing 710 balanced windows.
+4. Splits the balanced data by patient into 616 training windows and 94 test windows.
+5. Fits a `StandardScaler` and compares four candidate classifiers.
+6. Selects the best model by five-fold grouped cross-validation PR-AUC.
+7. Tunes the probability threshold for a target Pre-arrest recall of 0.70.
 
 The checked-in old artifacts contain:
 
 ```text
-model: RandomForest
+model: RandomForest (`models/random_forest_prearrest.joblib`)
 feature columns: 90
 decision threshold: 0.49333333333333335
 ```
@@ -168,42 +170,62 @@ The threshold is stored in `models/chosen_threshold.json`, not hard-coded in the
 
 ### Training Report Metadata
 
-The recorded outputs in `notebooks/precardiacTrain.ipynb` provide the following report details:
+The recorded outputs in `notebooks/Stable.ipynb` provide the following report details:
 
 | Item | Recorded value |
 | --- | --- |
+| Source windows | 12,209: 11,854 Normal and 355 Pre-arrest |
+| Windows after feature cleaning | 12,205 |
 | Candidate input columns | 95 |
 | Features retained | 90 |
-| Training windows | 528 |
-| Held-out test windows | 182 |
-| Training patients | 18 |
+| Balanced dataset | 710: 355 Normal and 355 Pre-arrest |
+| Training windows | 616 |
+| Held-out test windows | 94 |
+| Training patients | 20 |
 | Held-out test patients | 7 |
 | Cross-validation | 5-fold `StratifiedGroupKFold` |
 | Model ranking metric | Mean PR-AUC |
 | Target recall for threshold tuning | 0.70 |
 | Selected model | Random Forest |
 
-The model comparison recorded by the notebook was:
+The candidate models and recorded cross-validation results were:
 
 | Model | Mean PR-AUC | Mean F1 |
 | --- | ---: | ---: |
-| Random Forest | 0.705166 | 0.418569 |
-| XGBoost | 0.698553 | 0.490121 |
-| Logistic Regression | 0.653660 | 0.547159 |
-| SVM with RBF kernel | 0.572064 | 0.481749 |
+| Random Forest | 0.616463 | 0.413616 |
+| XGBoost | 0.611698 | 0.431130 |
+| SVM with RBF kernel | 0.561460 | 0.427784 |
+| Logistic Regression | 0.528216 | 0.453511 |
 
-Random Forest had the highest mean PR-AUC and was selected as the best model under that comparison criterion. The notebook's held-out test results at its tuned threshold of `0.177` were:
+Random Forest had the highest mean PR-AUC and was selected as the best model under that comparison criterion. Its configuration was `n_estimators=300`, `class_weight="balanced"`, and `random_state=42`. The notebook selected a threshold of `0.380` to target 70% Pre-arrest recall. Its held-out test results were:
 
 | Metric | Score |
 | --- | ---: |
-| Accuracy | 0.538 |
-| Precision | 0.504 |
-| Recall | 0.694 |
-| F1 score | 0.584 |
-| ROC-AUC | 0.547 |
-| PR-AUC | 0.516 |
+| Accuracy | 0.649 |
+| Precision | 0.737 |
+| Recall | 0.700 |
+| F1 score | 0.718 |
+| ROC-AUC | 0.744 |
+| PR-AUC | 0.849 |
 
-These are results recorded in the notebook for its test split, not guarantees for new data. The deployed artifact currently stores a different threshold, `0.49333333333333335`, and `app.py` uses that value when it converts probability into `Normal` or `Pre-arrest`.
+The recorded confusion matrix uses rows as true labels and columns as predicted labels, ordered as `[Normal, Pre-arrest]`:
+
+```text
+[[19, 15],
+ [18, 42]]
+```
+
+The top recorded Random Forest features by importance were:
+
+```text
+HRV_Prc20NN 0.0300       HRV_MedianNN 0.0271
+HRV_MeanNN 0.0239        HRV_IALS 0.0239
+HRV_MinNN 0.0230         HRV_SampEn 0.0200
+HRV_SDNNI1 0.0199        HRV_MaxNN 0.0191
+HRV_CVSD 0.0186          HRV_LZC 0.0177
+```
+
+These are results recorded in the stable notebook's held-out test split, not guarantees for new data. The notebook threshold is `0.380`; the currently deployed `models/chosen_threshold.json` contains `0.49333333333333335`, and `app.py` uses the value from that JSON file when it converts probability into `Normal` or `Pre-arrest`.
 
 ## Run The Website
 
@@ -218,7 +240,7 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 At startup, `app.py` loads these files once:
 
 ```text
-models/trained_model.pkl
+models/random_forest_prearrest.joblib
 models/feature_scaler.pkl
 models/feature_columns.json
 models/chosen_threshold.json

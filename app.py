@@ -13,7 +13,7 @@ WHAT THIS APP DOES
 2. Digitizes that image into a 1D numeric signal (image_to_signal.py).
 3. Converts the signal into the 90 HRV features the model was trained on
    (raw_to_hrv_features.py — this runs neurokit2's R-peak detector).
-4. Scales the features and runs them through trained_model.pkl.
+4. Scales the features and runs them through random_forest_prearrest.joblib.
 5. Shows the prediction (Normal / Pre-arrest) plus a sanity-check plot of
    the digitized signal with detected heartbeats marked, so you can see
    whether the digitization actually worked before trusting the result.
@@ -51,7 +51,7 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload limit
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
-MODEL_PATH = os.path.join(MODELS_DIR, "trained_model.pkl")
+MODEL_PATH = os.path.join(MODELS_DIR, "random_forest_prearrest.joblib")
 SCALER_PATH = os.path.join(MODELS_DIR, "feature_scaler.pkl")
 FEATURE_COLUMNS_PATH = os.path.join(MODELS_DIR, "feature_columns.json")
 THRESHOLD_PATH = os.path.join(MODELS_DIR, "chosen_threshold.json")
@@ -76,7 +76,7 @@ def load_artifacts():
     global _model, _scaler, _threshold, _threshold_model_name
     import joblib
 
-    for path, name in [(MODEL_PATH, "trained_model.pkl"),
+    for path, name in [(MODEL_PATH, "random_forest_prearrest.joblib"),
                         (SCALER_PATH, "feature_scaler.pkl"),
                         (FEATURE_COLUMNS_PATH, "feature_columns.json"),
                         (THRESHOLD_PATH, "chosen_threshold.json")]:

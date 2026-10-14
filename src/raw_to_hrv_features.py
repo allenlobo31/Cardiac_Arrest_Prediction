@@ -2,7 +2,7 @@
 raw_to_hrv_features.py
 
 Converts raw heartbeat data into the exact 90-feature HRV vector that
-trained_model.pkl expects, in the exact column order feature_columns.json
+random_forest_prearrest.joblib expects, in the exact column order feature_columns.json
 specifies. Two entry points depending on what raw data you have:
 
     - r_peaks_to_features()  : you already have R-peak locations
@@ -23,7 +23,7 @@ MIN_BEATS_REQUIRED = 150  # matches MIN_BEATS_PER_WINDOW used when the training 
 
 _DEFAULT_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
 _DEFAULT_FEATURE_COLUMNS = os.path.join(_DEFAULT_MODELS_DIR, "feature_columns.json")
-_DEFAULT_MODEL = os.path.join(_DEFAULT_MODELS_DIR, "trained_model.pkl")
+_DEFAULT_MODEL = os.path.join(_DEFAULT_MODELS_DIR, "random_forest_prearrest.joblib")
 _DEFAULT_SCALER = os.path.join(_DEFAULT_MODELS_DIR, "feature_scaler.pkl")
 _DEFAULT_THRESHOLD = os.path.join(_DEFAULT_MODELS_DIR, "chosen_threshold.json")
 
