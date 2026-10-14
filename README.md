@@ -164,7 +164,7 @@ The checked-in old artifacts contain:
 ```text
 model: RandomForest (`models/random_forest_prearrest.joblib`)
 feature columns: 90
-decision threshold: 0.49333333333333335
+decision threshold: 0.38
 ```
 
 The threshold is stored in `models/chosen_threshold.json`, not hard-coded in the website.
@@ -226,7 +226,7 @@ HRV_SDNNI1 0.0199        HRV_MaxNN 0.0191
 HRV_CVSD 0.0186          HRV_LZC 0.0177
 ```
 
-These are results recorded in the stable notebook's held-out test split, not guarantees for new data. The notebook threshold is `0.380`; the currently deployed `models/chosen_threshold.json` contains `0.49333333333333335`, and `app.py` uses the value from that JSON file when it converts probability into `Normal` or `Pre-arrest`.
+These are results recorded in the stable notebook's held-out test split, not guarantees for new data. The deployed `models/chosen_threshold.json` contains the stable threshold `0.380`, and `app.py` uses the value from that JSON file when it converts probability into `Normal` or `Pre-arrest`.
 
 ## Website Architecture
 
