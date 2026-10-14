@@ -20,6 +20,7 @@ The original pipeline extracts HRV features from annotated ECG records, trains a
 - [Dataset Preparation](#dataset-preparation)
 - [HRV Features](#hrv-features)
 - [Training](#training)
+- [Website Architecture](#website-architecture)
 - [Run The Website](#run-the-website)
 - [JSON API](#json-api)
 - [Limitations](#limitations)
@@ -226,6 +227,59 @@ HRV_CVSD 0.0186          HRV_LZC 0.0177
 ```
 
 These are results recorded in the stable notebook's held-out test split, not guarantees for new data. The notebook threshold is `0.380`; the currently deployed `models/chosen_threshold.json` contains `0.49333333333333335`, and `app.py` uses the value from that JSON file when it converts probability into `Normal` or `Pre-arrest`.
+
+## Website Architecture
+
+The website is a Flask application. Model artifacts are loaded once when `app.py` starts, then reused for each request.
+
+```mermaid
+flowchart TD
+  A[Browser] -->|GET /| B[app.py Flask routes]
+  B --> C[templates/index.html]
+  C -->|POST /predict<br/>ECG image + duration| D[src/image_to_signal.py]
+  D -->|1D signal| E[Sampling-rate validation]
+  E --> F[NeuroKit2 ECG cleaning<br/>and R-peak detection]
+  F --> G[src/raw_to_hrv_features.py]
+  G -->|90 HRV columns| H[feature_scaler.pkl]
+  H --> I[random_forest_prearrest.joblib]
+  I --> J[chosen_threshold.json]
+  J -->|Normal or Pre-arrest| C
+  B -->|GET /health| K[Readiness JSON]
+  B -->|POST /api/predict| L[JSON prediction route]
+  L --> G
+```
+
+### Application Components
+
+| Component | Responsibility |
+| --- | --- |
+| `app.py` | Creates the Flask server, loads artifacts, validates requests, calls the prediction pipeline, and formats HTML or JSON responses. |
+| `templates/index.html` | Displays the upload form, validation errors, prediction result, metrics, sanity plot, and limitation notice. |
+| `src/image_to_signal.py` | Converts a PNG/JPG ECG plot into one numeric signal value per image column using background contrast and interpolation. |
+| `src/raw_to_hrv_features.py` | Detects R-peaks from raw ECG when needed and calculates the ordered 90-feature NeuroKit2 HRV vector. |
+| `models/feature_scaler.pkl` | Applies the same feature scaling used during training. |
+| `models/random_forest_prearrest.joblib` | Produces the Normal/Pre-arrest probability from the scaled 90-feature vector. |
+| `models/chosen_threshold.json` | Provides the model name and probability threshold used for the final label. |
+
+### Request Routes
+
+| Route | Method | Purpose |
+| --- | --- | --- |
+| `/` | `GET` | Renders the empty prediction form. |
+| `/predict` | `POST` | Accepts an ECG image and duration, runs the image prediction pipeline, and renders the result page. |
+| `/health` | `GET` | Reports whether the model, scaler, and threshold were loaded successfully. |
+| `/api/predict` | `POST` | Accepts JSON containing either `r_peaks` or `ecg_signal` plus `sampling_rate`, then returns a JSON prediction. |
+
+### Image Request Lifecycle
+
+1. The browser submits the `ecg_image` file and `duration_seconds` to `/predict`.
+2. The image digitizer estimates the waveform and returns a one-dimensional signal.
+3. The server calculates `sampling_rate = image_width / duration_seconds` and checks the 50-2,000 Hz range.
+4. NeuroKit2 cleans the signal and detects R-peak sample positions.
+5. The 90 HRV features are generated in the exact order stored in `feature_columns.json`.
+6. The scaler transforms the feature row, and the Random Forest returns a probability.
+7. The probability is compared with the threshold loaded from `chosen_threshold.json`.
+8. The server renders the label, probability, beat count, sampling rate, and a base64 sanity plot with detected beats marked.
 
 ## Run The Website
 
