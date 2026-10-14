@@ -18,14 +18,14 @@ import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, render_template, request
 
-from NewModel.pre_arrest_features import build_features
+from Version2.NewModel.pre_arrest_features import build_features
 from src.image_to_signal import image_to_ecg_signal
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "NewModel", "pre_arrest_predictor.joblib")
+MODEL_PATH = os.path.join(BASE_DIR, "Version2", "NewModel", "pre_arrest_predictor.joblib")
 
 BASE_FEATURES = [
     "n_beats", "mean_rr", "mean_hr", "sdnn", "rmssd", "sdsd", "pnn50",
