@@ -208,20 +208,20 @@ export default function Home() {
     <>
       {/* Ambient ECG Pulse Trace Overlay on the Left (Matching Mockup) */}
       <div className="ecg-ambient-trace" aria-hidden="true">
-        <svg viewBox="0 0 540 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 320 140" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
-            d="M 0 95 L 90 95 C 102 95 106 82 112 82 C 118 82 122 95 132 95 L 148 95 L 158 20 L 172 145 L 184 75 L 192 95 L 230 95 C 242 95 248 70 260 70 C 272 70 278 95 292 95 L 320 95 L 330 30 L 344 140 L 356 80 L 364 95 L 540 95"
+            d="M 0 85 L 60 85 C 70 85 75 75 80 75 C 85 75 90 85 100 85 L 115 85 L 128 15 L 142 125 L 152 65 L 160 85 L 195 85 C 205 85 210 65 220 65 C 230 65 235 85 245 85 L 320 85"
             stroke="url(#ecgLineGradient)"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
           <defs>
-            <linearGradient id="ecgLineGradient" x1="0" y1="0" x2="540" y2="0" gradientUnits="userSpaceOnUse">
+            <linearGradient id="ecgLineGradient" x1="0" y1="0" x2="320" y2="0" gradientUnits="userSpaceOnUse">
               <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.04" />
-              <stop offset="28%" stopColor="#f43f5e" stopOpacity="0.5" />
+              <stop offset="30%" stopColor="#f43f5e" stopOpacity="0.5" />
               <stop offset="70%" stopColor="#fb7185" stopOpacity="0.45" />
-              <stop offset="100%" stopColor="#fb7185" stopOpacity="0.04" />
+              <stop offset="100%" stopColor="#fb7185" stopOpacity="0.02" />
             </linearGradient>
           </defs>
         </svg>
@@ -374,24 +374,27 @@ export default function Home() {
             {/* Duration Input & Action Strip */}
             <div className="card-controls-row">
               <div className="duration-col">
-                <div className="field-label-compact">
-                  <Clock size={16} weight="bold" />
-                  <span>Duration in Waveform Image</span>
+                <div className="duration-inline-group">
+                  <span className="field-label-inline">
+                    <Clock size={15} weight="bold" />
+                    <span>Duration:</span>
+                  </span>
+                  <div className="duration-input-capsule">
+                    <input
+                      id="duration_input"
+                      type="number"
+                      min="5"
+                      max="3600"
+                      step="0.1"
+                      placeholder="180"
+                      value={duration}
+                      onChange={(e) => setDuration(e.target.value)}
+                      required
+                    />
+                    <span className="capsule-unit">sec</span>
+                  </div>
                 </div>
-                <div className="duration-input-capsule">
-                  <input
-                    id="duration_input"
-                    type="number"
-                    min="5"
-                    max="3600"
-                    step="0.1"
-                    placeholder="180"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    required
-                  />
-                  <span className="capsule-unit">seconds</span>
-                </div>
+
                 <div className="duration-quick-pills">
                   <button
                     type="button"
@@ -419,7 +422,7 @@ export default function Home() {
 
               <div className="submit-col">
                 <button type="submit" className="btn-apple-eval" disabled={loading || !file}>
-                  <Heart size={20} weight="fill" />
+                  <Heart size={18} weight="fill" />
                   <span>{loading ? "Digitizing Waveform..." : "Digitize Waveform & Evaluate Risk"}</span>
                 </button>
               </div>
