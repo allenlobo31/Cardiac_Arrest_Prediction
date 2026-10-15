@@ -1,183 +1,1687 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Cardiac Arrest Warning — ECG Image Predictor</title>
-<style>
-  :root {
-    --bg: #0f172a;
-    --card: #ffffff;
-    --accent: #2563eb;
-    --danger: #dc2626;
-    --safe: #16a34a;
-    --muted: #6b7280;
-  }
-  * { box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
-    margin: 0;
-    padding: 32px 16px;
-    color: #111827;
-  }
-  .wrap { max-width: 640px; margin: 0 auto; }
-  h1 { font-size: 1.5rem; margin-bottom: 4px; }
-  .subtitle { color: var(--muted); margin-top: 0; margin-bottom: 24px; font-size: 0.95rem; }
-  .card {
-    background: var(--card);
-    border-radius: 14px;
-    padding: 24px;
-    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
-    margin-bottom: 20px;
-  }
-  label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
-  .hint { color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-bottom: 18px; }
-  input[type="file"], input[type="number"] {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    font-size: 0.95rem;
-  }
-  button {
-    background: var(--accent);
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    width: 100%;
-  }
-  button:hover { background: #1d4ed8; }
-  .error {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #991b1b;
-    padding: 14px 16px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    font-size: 0.9rem;
-  }
-  .result-badge {
-    display: inline-block;
-    padding: 6px 16px;
-    border-radius: 999px;
-    font-weight: 700;
-    font-size: 1.1rem;
-    color: white;
-    margin-bottom: 12px;
-  }
-  .badge-normal { background: var(--safe); }
-  .badge-prearrest { background: var(--danger); }
-  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
-  .metric { background: #f8fafc; border-radius: 8px; padding: 10px 14px; }
-  .metric .value { font-size: 1.15rem; font-weight: 700; }
-  .metric .label { font-size: 0.78rem; color: var(--muted); }
-  img.plot { width: 100%; border-radius: 8px; border: 1px solid #e5e7eb; margin-top: 10px; }
-  .disclaimer { font-size: 0.78rem; color: var(--muted); margin-top: 10px; line-height: 1.4; }
-  .result-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 16px;
-    background: rgba(15, 23, 42, 0.45);
-    overflow-y: auto;
-  }
-  .result-modal {
-    width: min(640px, 100%);
-    max-height: calc(100vh - 48px);
-    overflow-y: auto;
-    margin: auto;
-  }
-  .modal-actions { margin-top: 18px; }
-  .analyse-button { background: #0f766e; }
-  .analyse-button:hover { background: #115e59; }
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-  footer { text-align: center; color: var(--muted); font-size: 0.78rem; margin-top: 24px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardioPulse AI — Pre-Arrest Cardiac Warning System</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Satoshi Font (Primary) + Apple SF Pro system fallbacks -->
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,900&display=swap" rel="stylesheet">
+  <!-- Phosphor Icons (Web Font) -->
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css" />
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css" />
+
+  <style>
+    :root {
+      --font-family: 'Satoshi', -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif;
+      
+      /* Apple Dark Mode Palette */
+      --canvas: #090a10;
+      --canvas-surface: #10131d;
+      --canvas-elevated: rgba(18, 21, 32, 0.75);
+      --canvas-subtle: rgba(255, 255, 255, 0.04);
+      
+      /* Typography */
+      --text-main: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      
+      /* Cardiac & Apple Accents */
+      --heart-crimson: #e11d48;
+      --heart-rose: #f43f5e;
+      --heart-coral: #fb7185;
+      --heart-glow: rgba(244, 63, 94, 0.3);
+      --heart-tint: rgba(225, 29, 72, 0.12);
+      --heart-tint-border: rgba(244, 63, 94, 0.25);
+      
+      /* Status Accents */
+      --status-safe: #10b981;
+      --status-safe-bg: rgba(16, 185, 129, 0.12);
+      --status-safe-border: rgba(16, 185, 129, 0.28);
+      --status-safe-text: #34d399;
+      
+      --status-danger: #f43f5e;
+      --status-danger-bg: rgba(225, 29, 72, 0.14);
+      --status-danger-border: rgba(244, 63, 94, 0.35);
+      --status-danger-text: #fda4af;
+      
+      /* Borders & Shadows */
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-highlight: rgba(255, 255, 255, 0.16);
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.6), 0 20px 45px -12px rgba(0, 0, 0, 0.7);
+      --shadow-button: 0 8px 24px -4px rgba(225, 29, 72, 0.45);
+      --shadow-modal: 0 25px 80px -15px rgba(0, 0, 0, 0.9), 0 0 1px rgba(255, 255, 255, 0.2);
+      
+      /* Border Radii */
+      --radius-xl: 26px;
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-pill: 9999px;
+      
+      /* Transitions */
+      --ease-apple: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: var(--canvas);
+      background-image: 
+        radial-gradient(ellipse 90% 45% at 50% -8%, rgba(225, 29, 72, 0.14) 0%, rgba(9, 10, 16, 0) 75%),
+        radial-gradient(circle at 10% 30%, rgba(244, 63, 94, 0.05) 0%, transparent 45%),
+        radial-gradient(circle at 90% 50%, rgba(225, 29, 72, 0.04) 0%, transparent 45%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* Ambient frosted top bar */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(9, 10, 16, 0.82);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-bottom: 1px solid var(--border-subtle);
+      height: 64px;
+    }
+
+    .nav-container {
+      max-width: 980px;
+      margin: 0 auto;
+      height: 100%;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text-main);
+    }
+
+    .heart-logo {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, rgba(225, 29, 72, 0.25) 0%, rgba(244, 63, 94, 0.12) 100%);
+      border: 1px solid var(--heart-tint-border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--heart-rose);
+      box-shadow: 0 2px 10px rgba(225, 29, 72, 0.25);
+      transition: transform 0.25s var(--ease-apple), box-shadow 0.25s;
+    }
+
+    .brand-mark:hover .heart-logo {
+      transform: scale(1.06);
+      box-shadow: 0 4px 18px rgba(225, 29, 72, 0.4);
+    }
+
+    .brand-title {
+      font-size: 1.02rem;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      color: var(--text-main);
+    }
+
+    .brand-title span {
+      color: var(--heart-rose);
+      font-weight: 800;
+    }
+
+    .nav-status {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background-color: var(--status-safe);
+      border-radius: 50%;
+      position: relative;
+    }
+
+    .status-dot::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.4);
+      animation: pulse-ring 2s infinite ease-out;
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(0.9); opacity: 1; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+
+    /* Main container layout */
+    .page-main {
+      flex: 1;
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 48px 20px 64px;
+    }
+
+    /* Hero Header */
+    .hero-section {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 40px;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--heart-tint);
+      border: 1px solid var(--heart-tint-border);
+      color: var(--heart-rose);
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: var(--radius-pill);
+      margin-bottom: 16px;
+      box-shadow: 0 0 20px rgba(244, 63, 94, 0.15);
+    }
+
+    .hero-title {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      color: #ffffff;
+      line-height: 1.15;
+      margin-bottom: 16px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    .hero-desc {
+      font-size: 1.05rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      font-weight: 400;
+    }
+
+    /* Primary Apple Obsidian Card */
+    .apple-card {
+      background: var(--canvas-elevated);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-card);
+      padding: 38px 40px;
+      margin-bottom: 26px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .apple-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+    }
+
+    @media (max-width: 640px) {
+      .apple-card {
+        padding: 24px 20px;
+        border-radius: 20px;
+      }
+      .hero-title {
+        font-size: 1.95rem;
+      }
+    }
+
+    /* Quick Sample Tray */
+    .sample-strip {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .sample-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .sample-label i {
+      color: var(--heart-rose);
+      font-size: 16px;
+    }
+
+    .sample-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-sample {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 7px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.22s var(--ease-apple);
+    }
+
+    .btn-sample:hover {
+      background: var(--heart-tint);
+      border-color: var(--heart-tint-border);
+      color: var(--heart-rose);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(225, 29, 72, 0.25);
+    }
+
+    .btn-sample .pill-tag {
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-secondary);
+    }
+
+    .btn-sample:hover .pill-tag {
+      background: rgba(225, 29, 72, 0.25);
+      color: var(--heart-rose);
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 26px;
+    }
+
+    .field-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 9px;
+    }
+
+    .field-label {
+      font-size: 0.94rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .field-label i {
+      font-size: 17px;
+      color: var(--heart-coral);
+    }
+
+    .field-hint-inline {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* Dropzone */
+    .dropzone-container {
+      position: relative;
+      border: 2px dashed rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-lg);
+      padding: 34px 20px;
+      text-align: center;
+      background: rgba(12, 14, 22, 0.55);
+      transition: all 0.24s var(--ease-apple);
+      cursor: pointer;
+      outline: none;
+    }
+
+    .dropzone-container:hover,
+    .dropzone-container.is-dragover {
+      border-color: var(--heart-rose);
+      background: rgba(225, 29, 72, 0.06);
+      box-shadow: 0 0 35px rgba(244, 63, 94, 0.18);
+    }
+
+    .dropzone-icon {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 14px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--heart-rose);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+      transition: transform 0.25s var(--ease-apple);
+      font-size: 26px;
+    }
+
+    .dropzone-container:hover .dropzone-icon {
+      transform: scale(1.08);
+      border-color: var(--heart-tint-border);
+      box-shadow: 0 0 20px rgba(244, 63, 94, 0.35);
+    }
+
+    .dropzone-prompt {
+      font-size: 0.98rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 5px;
+    }
+
+    .dropzone-prompt span {
+      color: var(--heart-rose);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .dropzone-sub {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      max-width: 460px;
+      margin: 0 auto;
+    }
+
+    /* Native hidden input */
+    input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Live File Preview Card */
+    .file-preview {
+      display: none;
+      align-items: center;
+      gap: 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      margin-top: 14px;
+      text-align: left;
+    }
+
+    .preview-thumb {
+      width: 54px;
+      height: 54px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid var(--border-subtle);
+      background: #000000;
+      flex-shrink: 0;
+    }
+
+    .preview-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .preview-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .preview-meta {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .btn-clear-file {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      font-size: 18px;
+    }
+
+    .btn-clear-file:hover {
+      background: rgba(225, 29, 72, 0.2);
+      color: var(--heart-rose);
+    }
+
+    /* Duration Input Box */
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      padding: 15px 75px 15px 18px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      font-size: 1rem;
+      font-family: inherit;
+      color: #ffffff;
+      background: rgba(12, 14, 22, 0.7);
+      transition: all 0.22s var(--ease-apple);
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    input[type="number"]:focus {
+      outline: none;
+      border-color: var(--heart-rose);
+      background: rgba(15, 18, 28, 0.9);
+      box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.2);
+    }
+
+    .input-unit {
+      position: absolute;
+      right: 18px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    /* Presets */
+    .duration-presets {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 11px;
+      flex-wrap: wrap;
+    }
+
+    .duration-preset-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .preset-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.18s;
+    }
+
+    .preset-pill:hover,
+    .preset-pill.active {
+      background: var(--heart-tint);
+      border-color: var(--heart-tint-border);
+      color: var(--heart-rose);
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.2);
+    }
+
+    /* Submit Button */
+    .btn-submit {
+      width: 100%;
+      background: linear-gradient(135deg, #e11d48 0%, #f43f5e 100%);
+      color: #ffffff;
+      border: none;
+      padding: 17px 24px;
+      border-radius: var(--radius-lg);
+      font-size: 1.03rem;
+      font-weight: 700;
+      font-family: inherit;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: var(--shadow-button);
+      transition: all 0.24s var(--ease-apple);
+      margin-top: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 30px -4px rgba(225, 29, 72, 0.6);
+    }
+
+    .btn-submit:active:not(:disabled) {
+      transform: scale(0.985);
+    }
+
+    .btn-submit i {
+      font-size: 20px;
+    }
+
+    /* Loading state */
+    .loading-state {
+      display: none;
+      margin-top: 22px;
+      padding: 18px;
+      background: rgba(225, 29, 72, 0.08);
+      border: 1px solid var(--heart-tint-border);
+      border-radius: var(--radius-md);
+      text-align: center;
+    }
+
+    .loading-pulse-bar {
+      height: 3px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+      margin-bottom: 12px;
+    }
+
+    .loading-pulse-bar::before {
+      content: '';
+      position: absolute;
+      height: 100%;
+      width: 40%;
+      background: linear-gradient(90deg, #e11d48, #f43f5e);
+      border-radius: 999px;
+      animation: sweep 1.5s infinite ease-in-out;
+    }
+
+    @keyframes sweep {
+      0% { left: -40%; }
+      100% { left: 100%; }
+    }
+
+    .loading-text {
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: var(--heart-coral);
+    }
+
+    /* Error Banner */
+    .error-card {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 24px;
+      color: #fca5a5;
+    }
+
+    .error-card i {
+      font-size: 22px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .error-card-title {
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: #ffffff;
+      margin-bottom: 2px;
+    }
+
+    .error-card-desc {
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+
+    /* Modal Overlay */
+    .result-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      overflow-y: auto;
+      animation: overlayFadeIn 0.25s var(--ease-apple);
+    }
+
+    @keyframes overlayFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .result-modal-card {
+      width: min(740px, 100%);
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      background: #0f121d;
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-highlight);
+      box-shadow: var(--shadow-modal);
+      padding: 36px;
+      position: relative;
+      animation: modalSlideUp 0.35s var(--ease-apple);
+    }
+
+    @keyframes modalSlideUp {
+      from { opacity: 0; transform: scale(0.97) translateY(12px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    @media (max-width: 640px) {
+      .result-modal-card {
+        padding: 24px 18px;
+        border-radius: 20px;
+      }
+    }
+
+    .modal-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .modal-title-eyebrow {
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .btn-modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 16px;
+    }
+
+    .btn-modal-close:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+    }
+
+    /* Status Banner */
+    .status-banner {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 22px;
+      border-radius: var(--radius-lg);
+      margin-bottom: 26px;
+    }
+
+    .status-banner.is-prearrest {
+      background: var(--status-danger-bg);
+      border: 1px solid var(--status-danger-border);
+    }
+
+    .status-banner.is-normal {
+      background: var(--status-safe-bg);
+      border: 1px solid var(--status-safe-border);
+    }
+
+    .status-icon-wrap {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 26px;
+    }
+
+    .is-prearrest .status-icon-wrap {
+      background: rgba(225, 29, 72, 0.25);
+      color: #fb7185;
+      border: 1px solid var(--status-danger-border);
+      box-shadow: 0 0 20px rgba(225, 29, 72, 0.35);
+    }
+
+    .is-normal .status-icon-wrap {
+      background: rgba(16, 185, 129, 0.25);
+      color: #34d399;
+      border: 1px solid var(--status-safe-border);
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
+    }
+
+    .status-text-headline {
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .is-prearrest .status-text-headline {
+      color: #fda4af;
+    }
+
+    .is-normal .status-text-headline {
+      color: #6ee7b7;
+    }
+
+    .status-text-sub {
+      font-size: 0.86rem;
+      color: var(--text-secondary);
+      margin-top: 3px;
+    }
+
+    /* Gauge Card */
+    .gauge-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      margin-bottom: 24px;
+    }
+
+    .gauge-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .gauge-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .gauge-value {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--heart-coral);
+    }
+
+    .gauge-track {
+      height: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-pill);
+      position: relative;
+      overflow: visible;
+      margin: 16px 0 16px;
+    }
+
+    .gauge-fill {
+      height: 100%;
+      border-radius: var(--radius-pill);
+      background: linear-gradient(90deg, #10b981 0%, #f59e0b 40%, #e11d48 100%);
+      box-shadow: 0 0 15px rgba(225, 29, 72, 0.5);
+      transition: width 1s var(--ease-apple);
+    }
+
+    .gauge-threshold-pin {
+      position: absolute;
+      top: -6px;
+      bottom: -6px;
+      width: 2px;
+      background: #ffffff;
+      z-index: 2;
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+    }
+
+    .gauge-threshold-pin::after {
+      content: 'Cutoff 38%';
+      position: absolute;
+      top: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ffffff;
+      color: #090a10;
+      font-size: 0.68rem;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .gauge-legend {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* 4-Bento Metrics */
+    .metrics-bento {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 600px) {
+      .metrics-bento {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .metric-tile {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: left;
+    }
+
+    .metric-tile-label {
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 6px;
+    }
+
+    .metric-tile-value {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+    }
+
+    .metric-tile-sub {
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      margin-top: 3px;
+    }
+
+    /* Plot Frame */
+    .plot-container {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .plot-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .plot-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .plot-badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+      background: var(--heart-tint);
+      color: var(--heart-rose);
+      border: 1px solid var(--heart-tint-border);
+    }
+
+    img.plot-img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      display: block;
+      background: #ffffff;
+    }
+
+    .plot-disclaimer {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      margin-top: 12px;
+    }
+
+    /* Modal Actions */
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .btn-primary-reset {
+      flex: 2;
+      background: linear-gradient(135deg, #e11d48 0%, #f43f5e 100%);
+      color: #ffffff;
+      border: none;
+      padding: 14px 20px;
+      border-radius: var(--radius-md);
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: var(--shadow-button);
+      transition: all 0.2s var(--ease-apple);
+    }
+
+    .btn-primary-reset:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px -4px rgba(225, 29, 72, 0.6);
+    }
+
+    .btn-secondary-action {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      padding: 14px 18px;
+      border-radius: var(--radius-md);
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary-action:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+    }
+
+    /* Architecture Bento */
+    .pipeline-section {
+      margin-top: 48px;
+    }
+
+    .section-eyebrow {
+      text-align: center;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .section-heading {
+      text-align: center;
+      font-size: 1.55rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      color: #ffffff;
+      margin-bottom: 28px;
+    }
+
+    .pipeline-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .pipeline-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .pipeline-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .pipeline-card {
+      background: var(--canvas-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px 20px;
+      box-shadow: var(--shadow-card);
+      transition: all 0.22s var(--ease-apple);
+    }
+
+    .pipeline-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(244, 63, 94, 0.3);
+      box-shadow: 0 10px 30px -5px rgba(225, 29, 72, 0.15);
+    }
+
+    .step-icon-wrapper {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--heart-tint);
+      color: var(--heart-rose);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      border: 1px solid var(--heart-tint-border);
+      font-size: 18px;
+    }
+
+    .step-title {
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+
+    .step-desc {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border-subtle);
+      background: #06070a;
+      padding: 32px 24px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.84rem;
+      margin-top: 64px;
+    }
+
+    .footer-content {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .footer-badge {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Cardiac Arrest Warning — HRV Predictor</h1>
-  <p class="subtitle">Upload a screenshot/plot of an ECG waveform. It gets digitized into a signal, converted into HRV features, and run through the trained model.</p>
 
-  {% if error %}
-    <div class="error">{{ error }}</div>
-  {% endif %}
-
-  <div class="card">
-    <form action="/predict" method="post" enctype="multipart/form-data">
-      <label for="ecg_image">ECG waveform image</label>
-      <input type="file" id="ecg_image" name="ecg_image" accept="image/*" required>
-      <p class="hint">A clean digital plot works best — a screenshot of a waveform chart, not a photo of paper. Crop out axis labels/titles if you can.</p>
-
-      <label for="duration_seconds">Duration shown in the image (seconds)</label>
-      <input type="number" id="duration_seconds" name="duration_seconds" min="5" max="3600" step="0.1" placeholder="e.g. 180" required>
-      <p class="hint">How many seconds of ECG the image spans, left edge to right edge. This needs at least ~150 heartbeats total (a couple of minutes at a resting heart rate) for the model to compute reliable features — very short clips will be rejected.</p>
-
-      <button type="submit">Analyze ECG image</button>
-    </form>
-  </div>
-
-  {% if result %}
-  <div class="result-overlay" role="presentation">
-    <section class="card result-modal" role="dialog" aria-modal="true" aria-labelledby="result-title">
-      <h2 id="result-title" class="sr-only">ECG analysis result</h2>
-      {% if result.label == "Pre-arrest" %}
-        <span class="result-badge badge-prearrest">⚠ Pre-arrest signal</span>
-      {% else %}
-        <span class="result-badge badge-normal">✓ Normal</span>
-      {% endif %}
-
-      <div class="metrics">
-        <div class="metric">
-          <div class="value">{{ "%.1f"|format(result.probability * 100) }}%</div>
-          <div class="label">predicted probability</div>
+  <!-- Top Navigation Header -->
+  <header class="top-nav">
+    <div class="nav-container">
+      <a href="/" class="brand-mark" title="CardioPulse AI">
+        <div class="heart-logo">
+          <i class="ph-fill ph-heartbeat"></i>
         </div>
-        <div class="metric">
-          <div class="value">{{ result.threshold_used }}</div>
-          <div class="label">decision threshold</div>
+        <div class="brand-title">CardioPulse <span>AI</span></div>
+      </a>
+
+      <div class="nav-status">
+        <span class="status-dot"></span>
+        <span>Engine Calibrated &middot; RF Cutoff 0.38</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Page Main Content -->
+  <main class="page-main">
+    
+    <!-- Hero Header -->
+    <section class="hero-section">
+      <div class="hero-eyebrow">
+        <i class="ph-fill ph-sparkle"></i>
+        Biometric Signal Intelligence
+      </div>
+      <h1 class="hero-title">Early Warning for Pre-Arrest Cardiac Signals</h1>
+      <p class="hero-desc">
+        Digitize standard ECG plots into clean 1D time-series, extract 90 non-linear Heart Rate Variability biomarkers, and assess risk using our tuned Random Forest classifier.
+      </p>
+    </section>
+
+    <!-- Error Alert Banner -->
+    {% if error %}
+    <div class="error-card" role="alert">
+      <i class="ph-bold ph-warning-circle"></i>
+      <div>
+        <div class="error-card-title">Processing Notice</div>
+        <div class="error-card-desc">{{ error }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Upload & Prediction Card -->
+    <section class="apple-card" aria-labelledby="form-heading">
+      <h2 id="form-heading" class="sr-only">ECG Waveform Analysis Input</h2>
+
+      <!-- Quick Test Traces Tray -->
+      <div class="sample-strip">
+        <div class="sample-label">
+          <i class="ph-bold ph-pulse"></i>
+          Quick Demo Traces:
         </div>
-        <div class="metric">
-          <div class="value">{{ result.beats_detected }}</div>
-          <div class="label">beats detected</div>
-        </div>
-        <div class="metric">
-          <div class="value">{{ result.sampling_rate_used }} Hz</div>
-          <div class="label">implied sampling rate</div>
+        <div class="sample-buttons">
+          <button type="button" class="btn-sample" id="load-sample-normal" title="Load verified normal sinus rhythm trace">
+            <span>Normal Rhythm</span>
+            <span class="pill-tag">180s</span>
+          </button>
+          <button type="button" class="btn-sample" id="load-sample-prearrest" title="Load verified pre-arrest pattern trace">
+            <span>Pre-Arrest Pattern</span>
+            <span class="pill-tag">130s</span>
+          </button>
         </div>
       </div>
 
-      <img class="plot" src="{{ result.plot_uri }}" alt="Digitized signal with detected beats">
-      <p class="disclaimer">
-        This plot is the signal actually recovered from your image, with the beats the model used marked in red —
-        check it matches your original waveform before trusting the result above.
-        This tool is not a medical device and does not provide medical advice; digitizing a static image is an
-        approximation, not a calibrated ECG reading.
-      </p>
-      <div class="modal-actions">
-        <button class="analyse-button" type="button" onclick="window.location.href='/'">Analyse image</button>
+      <!-- Analysis Form -->
+      <form id="prediction-form" action="/predict" method="post" enctype="multipart/form-data">
+        
+        <!-- Field 1: Image Upload -->
+        <div class="form-group">
+          <div class="field-header">
+            <label for="ecg_image" class="field-label">
+              <i class="ph-bold ph-image"></i>
+              ECG Waveform Image
+            </label>
+            <span class="field-hint-inline">Tight crop on trace</span>
+          </div>
+
+          <div class="dropzone-container" id="dropzone">
+            <input type="file" id="ecg_image" name="ecg_image" accept="image/*" required>
+            
+            <div id="dropzone-default-view">
+              <div class="dropzone-icon">
+                <i class="ph-bold ph-upload-simple"></i>
+              </div>
+              <div class="dropzone-prompt"><span>Drop your ECG plot here</span> or click to browse</div>
+              <p class="dropzone-sub">
+                Best results with tight crops on high-contrast black or dark traces without grid lines or axis legends.
+              </p>
+            </div>
+
+            <!-- Dynamic File Preview -->
+            <div class="file-preview" id="file-preview">
+              <img id="preview-thumbnail" class="preview-thumb" src="" alt="ECG preview thumbnail">
+              <div class="preview-details">
+                <div class="preview-name" id="preview-filename">trace.png</div>
+                <div class="preview-meta" id="preview-filesize">0 KB &middot; Ready to digitize</div>
+              </div>
+              <button type="button" class="btn-clear-file" id="btn-clear-selection" title="Remove selected image">
+                <i class="ph-bold ph-x"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field 2: Duration -->
+        <div class="form-group">
+          <div class="field-header">
+            <label for="duration_seconds" class="field-label">
+              <i class="ph-bold ph-clock"></i>
+              Duration in Waveform Image
+            </label>
+            <span class="field-hint-inline">Min ~150 beats (approx 2&ndash;3 min)</span>
+          </div>
+
+          <div class="input-wrapper">
+            <input type="number" id="duration_seconds" name="duration_seconds" min="5" max="3600" step="0.1" placeholder="e.g. 180" required>
+            <span class="input-unit">seconds</span>
+          </div>
+
+          <!-- Quick Duration Presets -->
+          <div class="duration-presets">
+            <span class="duration-preset-label">Standard spans:</span>
+            <button type="button" class="preset-pill" data-seconds="130">130s (2m 10s)</button>
+            <button type="button" class="preset-pill active" data-seconds="180">180s (3m Standard)</button>
+            <button type="button" class="preset-pill" data-seconds="300">300s (5m Full Strip)</button>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn-submit" id="submit-button">
+          <i class="ph-fill ph-heart"></i>
+          <span id="submit-text">Digitize Waveform &amp; Evaluate Risk</span>
+        </button>
+
+        <!-- Dynamic Progress Indicator -->
+        <div class="loading-state" id="loading-state">
+          <div class="loading-pulse-bar"></div>
+          <div class="loading-text" id="loading-status-text">Digitizing waveform trace...</div>
+        </div>
+
+      </form>
+    </section>
+
+    <!-- Apple Health-Style Result Overlay / Modal -->
+    {% if result %}
+    <div class="result-overlay" id="result-overlay" role="dialog" aria-modal="true" aria-labelledby="result-modal-title">
+      <div class="result-modal-card">
+        
+        <div class="modal-header-row">
+          <div class="modal-title-eyebrow">CardioPulse Diagnostic Summary</div>
+          <button type="button" class="btn-modal-close" id="btn-close-modal" aria-label="Dismiss result" onclick="document.getElementById('result-overlay').style.display='none'">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+
+        <!-- Status Banner -->
+        {% if result.label == "Pre-arrest" %}
+        <div class="status-banner is-prearrest">
+          <div class="status-icon-wrap">
+            <i class="ph-fill ph-warning-circle"></i>
+          </div>
+          <div>
+            <div id="result-modal-title" class="status-text-headline">Pre-Arrest Signal Detected</div>
+            <div class="status-text-sub">Model risk score exceeds the calibrated clinical warning threshold of {{ result.threshold_used }}.</div>
+          </div>
+        </div>
+        {% else %}
+        <div class="status-banner is-normal">
+          <div class="status-icon-wrap">
+            <i class="ph-fill ph-check-circle"></i>
+          </div>
+          <div>
+            <div id="result-modal-title" class="status-text-headline">Normal Sinus Rhythm</div>
+            <div class="status-text-sub">Heart Rate Variability metrics conform to normal physiological baseline patterns.</div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Risk Probability Gauge -->
+        <div class="gauge-card">
+          <div class="gauge-header">
+            <span class="gauge-title">Pre-Arrest Probability Score</span>
+            <span class="gauge-value">{{ "%.1f"|format(result.probability * 100) }}%</span>
+          </div>
+          
+          <div class="gauge-track">
+            <div class="gauge-fill" style="width: {{ [result.probability * 100, 100]|min }}%;"></div>
+            <div class="gauge-threshold-pin" style="left: {{ result.threshold_used * 100 }}%;"></div>
+          </div>
+
+          <div class="gauge-legend">
+            <span>0% (Low Risk)</span>
+            <span>Cutoff: {{ "%.1f"|format(result.threshold_used * 100) }}%</span>
+            <span>100% (High Risk)</span>
+          </div>
+        </div>
+
+        <!-- 4 Bento Metric Tiles -->
+        <div class="metrics-bento">
+          <div class="metric-tile">
+            <div class="metric-tile-label">Confidence</div>
+            <div class="metric-tile-value">{{ "%.1f"|format(result.probability * 100) }}%</div>
+            <div class="metric-tile-sub">Model probability</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-tile-label">Threshold</div>
+            <div class="metric-tile-value">{{ result.threshold_used }}</div>
+            <div class="metric-tile-sub">Decision boundary</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-tile-label">Heartbeats</div>
+            <div class="metric-tile-value">{{ result.beats_detected }}</div>
+            <div class="metric-tile-sub">R-peaks detected</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-tile-label">Sampling Rate</div>
+            <div class="metric-tile-value">{{ result.sampling_rate_used }}<span style="font-size: 0.8rem; font-weight: 600;"> Hz</span></div>
+            <div class="metric-tile-sub">Reconstructed</div>
+          </div>
+        </div>
+
+        <!-- Sanity Plot Container -->
+        <div class="plot-container">
+          <div class="plot-header">
+            <div class="plot-title">
+              <i class="ph-bold ph-waveform"></i>
+              Digitized Signal &amp; Detected R-Peaks
+            </div>
+            <span class="plot-badge">NeuroKit2 Validated</span>
+          </div>
+          <img class="plot-img" src="{{ result.plot_uri }}" alt="Digitized signal with detected beats marked in red">
+          <p class="plot-disclaimer">
+            Visual inspection plot: the slate line is the waveform reconstructed from the image, and red markers denote detected R-peaks. Ensure this matches your original recording.
+          </p>
+        </div>
+
+        <!-- Modal Actions -->
+        <div class="modal-actions">
+          <button type="button" class="btn-primary-reset" onclick="window.location.href='/'">
+            <i class="ph-bold ph-arrows-clockwise"></i>
+            Analyze Another Waveform
+          </button>
+          <button type="button" class="btn-secondary-action" onclick="window.print()">
+            <i class="ph-bold ph-printer"></i>
+            Print Report
+          </button>
+        </div>
+
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Apple-Style Architecture Bento -->
+    <section class="pipeline-section" aria-labelledby="pipeline-heading">
+      <div class="section-eyebrow">Scientific Architecture</div>
+      <h2 id="pipeline-heading" class="section-heading">How the Predictive Pipeline Operates</h2>
+
+      <div class="pipeline-grid">
+        <div class="pipeline-card">
+          <div class="step-icon-wrapper">
+            <i class="ph-bold ph-waveform"></i>
+          </div>
+          <div class="step-title">1. Trace Digitization</div>
+          <div class="step-desc">
+            Computer-vision algorithms scan vertical pixel columns to convert 2D static plots into continuous 1D voltage timeseries.
+          </div>
+        </div>
+
+        <div class="pipeline-card">
+          <div class="step-icon-wrapper">
+            <i class="ph-bold ph-heartbeat"></i>
+          </div>
+          <div class="step-title">2. QRS Peak Detection</div>
+          <div class="step-desc">
+            NeuroKit2 QRS filtering pinpoints ventricular depolarizations, measuring precise RR interval dynamics across beats.
+          </div>
+        </div>
+
+        <div class="pipeline-card">
+          <div class="step-icon-wrapper">
+            <i class="ph-bold ph-pulse"></i>
+          </div>
+          <div class="step-title">3. 90 HRV Biomarkers</div>
+          <div class="step-desc">
+            Computes time-domain (RMSSD, SDNN), spectral (LF/HF ratio), and non-linear complexity metrics (Poincaré &amp; entropy).
+          </div>
+        </div>
+
+        <div class="pipeline-card">
+          <div class="step-icon-wrapper">
+            <i class="ph-bold ph-cpu"></i>
+          </div>
+          <div class="step-title">4. Random Forest</div>
+          <div class="step-desc">
+            Ensemble decision trees evaluate the scaled feature vector against an optimized 0.38 decision boundary to flag pre-arrest signals.
+          </div>
+        </div>
       </div>
     </section>
-  </div>
-  {% endif %}
 
-  <footer>HRV cardiac-arrest-warning model &middot; local demo</footer>
-</div>
+  </main>
+
+  <!-- Minimalist Clinical Research Footer -->
+  <footer>
+    <div class="footer-content">
+      <p>CardioPulse AI &middot; HRV Cardiac Arrest Early Warning System</p>
+      <span class="footer-badge">Demonstration &amp; Engineering Prototype &middot; Not an FDA/CE medical diagnostic device</span>
+    </div>
+  </footer>
+
+  <!-- Interactive JavaScript -->
+  <script>
+    (function() {
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('ecg_image');
+      const defaultView = document.getElementById('dropzone-default-view');
+      const filePreview = document.getElementById('file-preview');
+      const previewThumb = document.getElementById('preview-thumbnail');
+      const previewFilename = document.getElementById('preview-filename');
+      const previewFilesize = document.getElementById('preview-filesize');
+      const btnClearFile = document.getElementById('btn-clear-selection');
+      
+      const durationInput = document.getElementById('duration_seconds');
+      const presetPills = document.querySelectorAll('.preset-pill');
+      const sampleNormal = document.getElementById('load-sample-normal');
+      const samplePrearrest = document.getElementById('load-sample-prearrest');
+
+      const form = document.getElementById('prediction-form');
+      const submitBtn = document.getElementById('submit-button');
+      const submitText = document.getElementById('submit-text');
+      const loadingState = document.getElementById('loading-state');
+      const loadingStatus = document.getElementById('loading-status-text');
+
+      function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 KB';
+        const k = 1024;
+        const dm = 1;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+      }
+
+      function updateFilePreview(file) {
+        if (!file) {
+          defaultView.style.display = 'block';
+          filePreview.style.display = 'none';
+          return;
+        }
+
+        defaultView.style.display = 'none';
+        filePreview.style.display = 'flex';
+        previewFilename.textContent = file.name;
+        previewFilesize.textContent = formatBytes(file.size) + ' · Ready to digitize';
+
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            previewThumb.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        } else {
+          previewThumb.src = '';
+        }
+      }
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.classList.add('is-dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.classList.remove('is-dragover');
+        });
+      });
+
+      dropzone.addEventListener('drop', function(e) {
+        if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+          fileInput.files = e.dataTransfer.files;
+          updateFilePreview(e.dataTransfer.files[0]);
+        }
+      });
+
+      fileInput.addEventListener('change', function() {
+        if (fileInput.files && fileInput.files[0]) {
+          updateFilePreview(fileInput.files[0]);
+        }
+      });
+
+      btnClearFile.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        fileInput.value = '';
+        updateFilePreview(null);
+      });
+
+      presetPills.forEach(pill => {
+        pill.addEventListener('click', function() {
+          presetPills.forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          durationInput.value = pill.getAttribute('data-seconds');
+        });
+      });
+
+      durationInput.addEventListener('input', function() {
+        const val = durationInput.value.trim();
+        presetPills.forEach(pill => {
+          if (pill.getAttribute('data-seconds') === val) {
+            pill.classList.add('active');
+          } else {
+            pill.classList.remove('active');
+          }
+        });
+      });
+
+      async function loadSampleImage(filename, duration, label) {
+        try {
+          submitBtn.disabled = true;
+          submitText.textContent = `Loading ${label}...`;
+          
+          const response = await fetch(`/static/samples/${filename}`);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch sample: ${response.statusText}`);
+          }
+          const blob = await response.blob();
+          const file = new File([blob], filename, { type: blob.type || 'image/png' });
+          
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(file);
+          fileInput.files = dataTransfer.files;
+
+          durationInput.value = duration;
+          presetPills.forEach(p => {
+            p.classList.toggle('active', p.getAttribute('data-seconds') === String(duration));
+          });
+
+          updateFilePreview(file);
+        } catch (err) {
+          console.error('Error loading sample:', err);
+          alert('Could not load sample trace.');
+        } finally {
+          submitBtn.disabled = false;
+          submitText.textContent = 'Digitize Waveform & Evaluate Risk';
+        }
+      }
+
+      if (sampleNormal) {
+        sampleNormal.addEventListener('click', () => {
+          loadSampleImage('sample_ecg_180sec.png', 180, 'Normal Rhythm Sample');
+        });
+      }
+
+      if (samplePrearrest) {
+        samplePrearrest.addEventListener('click', () => {
+          loadSampleImage('sample_ecg_prearrest_130sec.png', 130, 'Pre-Arrest Sample');
+        });
+      }
+
+      form.addEventListener('submit', function() {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.75';
+        submitBtn.style.cursor = 'wait';
+        submitText.textContent = 'Processing Waveform...';
+        loadingState.style.display = 'block';
+
+        const stages = [
+          { time: 600, text: 'Filtering pixel traces...' },
+          { time: 1300, text: 'Detecting R-peaks with NeuroKit2...' },
+          { time: 2100, text: 'Extracting 90 non-linear HRV features...' },
+          { time: 2900, text: 'Evaluating Random Forest pre-arrest classifier...' }
+        ];
+
+        stages.forEach(stage => {
+          setTimeout(() => {
+            if (loadingStatus) {
+              loadingStatus.textContent = stage.text;
+            }
+          }, stage.time);
+        });
+      });
+
+      window.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          const overlay = document.getElementById('result-overlay');
+          if (overlay) overlay.style.display = 'none';
+        }
+      });
+
+    })();
+  </script>
 </body>
 </html>

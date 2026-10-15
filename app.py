@@ -48,6 +48,7 @@ from src.raw_to_hrv_features import ecg_signal_to_features, r_peaks_to_features
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload limit
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
@@ -95,22 +96,36 @@ def load_artifacts():
 
 
 def _make_sanity_plot(cleaned_signal, r_peak_samples, sampling_rate):
-    """Renders a small PNG (as a base64 data URI) showing the digitized
-    signal with detected R-peaks marked, so the user can visually confirm
-    the digitization worked before trusting the prediction."""
+    """Renders a clean, Apple-aesthetic PNG (as base64 data URI) showing the
+    digitized signal with detected R-peaks marked in cardiac crimson."""
     t = np.arange(len(cleaned_signal)) / sampling_rate
-    fig, ax = plt.subplots(figsize=(9, 2.6), dpi=110)
-    ax.plot(t, cleaned_signal, linewidth=0.8, color="#2563eb")
+    fig, ax = plt.subplots(figsize=(10, 2.5), dpi=130)
+    fig.patch.set_facecolor("#ffffff")
+    ax.set_facecolor("#ffffff")
+
+    # Waveform trace in refined deep slate
+    ax.plot(t, cleaned_signal, linewidth=1.1, color="#0f172a", alpha=0.9, label="Digitized waveform")
+
+    # Detected R-peaks in vibrant cardiac crimson
     peak_times = np.asarray(r_peak_samples) / sampling_rate
     peak_values = np.asarray(cleaned_signal)[np.asarray(r_peak_samples, dtype=int)]
-    ax.scatter(peak_times, peak_values, color="#dc2626", s=14, zorder=3, label="detected beats")
-    ax.set_xlabel("time (s)")
+    ax.scatter(peak_times, peak_values, color="#e11d48", edgecolors="#ffffff", linewidths=0.5, s=24, zorder=4, label="Detected R-peaks")
+
+    # Minimalist Apple-style spines and axis styling
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_color("#e2e8f0")
+    ax.spines["bottom"].set_linewidth(1.0)
+
+    ax.tick_params(axis="x", colors="#64748b", labelsize=8.5, length=3, direction="out")
     ax.set_yticks([])
-    ax.legend(loc="upper right", fontsize=8, frameon=False)
-    fig.tight_layout()
+    ax.set_xlabel("Time (seconds)", fontsize=8.5, color="#64748b", labelpad=6)
+    ax.legend(loc="upper right", fontsize=8.5, frameon=True, facecolor="#ffffff", edgecolor="#e2e8f0", fancybox=True)
+    fig.tight_layout(pad=0.8)
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png")
+    fig.savefig(buf, format="png", bbox_inches="tight", facecolor=fig.get_facecolor(), edgecolor="none")
     plt.close(fig)
     buf.seek(0)
     encoded = base64.b64encode(buf.read()).decode("ascii")
@@ -199,6 +214,58 @@ def predict_from_image():
                                       "Check the server logs for details.")
 
 
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept"
+    return response
+
+
+@app.route("/api/predict_image", methods=["POST", "OPTIONS"])
+def api_predict_image():
+    """Dedicated REST endpoint for React/Next.js: accepts multipart image + duration, returns JSON."""
+    if request.method == "OPTIONS":
+        return "", 204
+    if _model is None:
+        return jsonify({"error": "Model not loaded — check server startup logs."}), 503
+
+    image_file = request.files.get("ecg_image")
+    duration_raw = request.form.get("duration_seconds", "").strip()
+
+    if image_file is None or image_file.filename == "":
+        return jsonify({"error": "Please choose an image file to upload."}), 400
+
+    try:
+        duration_seconds = float(duration_raw)
+    except ValueError:
+        return jsonify({"error": "'Duration (seconds)' must be a valid number."}), 400
+
+    if not (MIN_DURATION_SECONDS <= duration_seconds <= MAX_DURATION_SECONDS):
+        return jsonify({
+            "error": f"Duration looks implausible ({duration_seconds}s). Expected between {MIN_DURATION_SECONDS} and {MAX_DURATION_SECONDS}s."
+        }), 400
+
+    try:
+        image_bytes = image_file.read()
+        ecg_signal = image_to_ecg_signal(image_bytes)
+
+        sampling_rate = len(ecg_signal) / duration_seconds
+        if not (MIN_SAMPLING_RATE <= sampling_rate <= MAX_SAMPLING_RATE):
+            return jsonify({
+                "error": f"Implied sampling rate ({sampling_rate:.1f} Hz) is outside plausible range ({MIN_SAMPLING_RATE}-{MAX_SAMPLING_RATE} Hz). Double-check the duration entered."
+            }), 400
+
+        result = _run_prediction_pipeline(ecg_signal, sampling_rate)
+        return jsonify(result), 200
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception:
+        app.logger.exception("Unexpected error during image prediction")
+        return jsonify({"error": "Something went wrong processing that image."}), 500
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """Simple readiness check — confirms the model artifacts are loaded and
@@ -212,10 +279,12 @@ def health():
     }), (200 if ok else 503)
 
 
-@app.route("/api/predict", methods=["POST"])
+@app.route("/api/predict", methods=["POST", "OPTIONS"])
 def api_predict():
     """Original JSON API, unchanged — still available for programmatic use
     (e.g. sending raw R-peaks or an ECG signal directly, no image involved)."""
+    if request.method == "OPTIONS":
+        return "", 204
     if _model is None:
         return jsonify({"error": "Model not loaded — check server startup logs."}), 503
 
