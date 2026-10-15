@@ -47,7 +47,7 @@ export default function Home() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize theme (defaults to Light Mode)
+  // Initialize theme (defaults to Light Mode matching mockup)
   useEffect(() => {
     const saved = localStorage.getItem("cardiopulse-theme") as "light" | "dark" | null;
     const initialTheme = saved || "light";
@@ -70,7 +70,6 @@ export default function Home() {
         if (res.ok) {
           setBackendReady(true);
         } else {
-          // direct fallback
           const directRes = await fetch("http://127.0.0.1:5000/health");
           if (directRes.ok) setBackendReady(true);
         }
@@ -207,33 +206,39 @@ export default function Home() {
 
   return (
     <>
-      {/* Floating Ambient Red / Rose Background Blobs */}
-      <div className="ambient-blobs-layer" aria-hidden="true">
-        <div className="ambient-blob blob-1"></div>
-        <div className="ambient-blob blob-2"></div>
-        <div className="ambient-blob blob-3"></div>
+      {/* Ambient ECG Pulse Trace Overlay on the Left (Matching Mockup) */}
+      <div className="ecg-ambient-trace" aria-hidden="true">
+        <svg viewBox="0 0 540 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M 0 95 L 90 95 C 102 95 106 82 112 82 C 118 82 122 95 132 95 L 148 95 L 158 20 L 172 145 L 184 75 L 192 95 L 230 95 C 242 95 248 70 260 70 C 272 70 278 95 292 95 L 320 95 L 330 30 L 344 140 L 356 80 L 364 95 L 540 95"
+            stroke="url(#ecgLineGradient)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <defs>
+            <linearGradient id="ecgLineGradient" x1="0" y1="0" x2="540" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.04" />
+              <stop offset="28%" stopColor="#f43f5e" stopOpacity="0.5" />
+              <stop offset="70%" stopColor="#fb7185" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#fb7185" stopOpacity="0.04" />
+            </linearGradient>
+          </defs>
+        </svg>
       </div>
 
       {/* Top Apple Nav Header */}
       <header className="top-nav">
         <div className="nav-container">
-          <a href="#" className="brand-mark">
-            <div className="heart-logo heart-beat-active">
-              <Heartbeat size={22} weight="fill" />
-            </div>
-            <div className="brand-title">
-              CardioPulse <span>AI</span>
-            </div>
+          <a href="#" className="brand-mark" aria-label="CardioPulse AI Home">
+            <img
+              src="/logo.png"
+              alt="CardioPulse AI"
+              className="brand-logo-img"
+            />
           </a>
 
           <div className="nav-right-cluster">
-            <div className="nav-status">
-              <span className="status-dot"></span>
-              <span>
-                {backendReady ? "Engine Calibrated • RF 0.38 Cutoff" : "Connecting to Engine (Port 5000)"}
-              </span>
-            </div>
-
             <button
               type="button"
               className="theme-toggle-btn"
@@ -242,9 +247,9 @@ export default function Home() {
               aria-label="Toggle light and dark mode"
             >
               {theme === "light" ? (
-                <Moon size={18} weight="bold" />
-              ) : (
                 <Sun size={18} weight="bold" />
+              ) : (
+                <Moon size={18} weight="bold" />
               )}
             </button>
           </div>
@@ -255,12 +260,12 @@ export default function Home() {
       <main className="page-main">
         {/* Hero Section */}
         <section className="hero-section">
-          <div className="hero-eyebrow anim-stagger-1">
-            <Sparkle size={14} weight="fill" />
-            Biometric Signal Intelligence
-          </div>
-          <h1 className="hero-title anim-stagger-2">Early Warning for Pre-Arrest Cardiac Signals</h1>
-          <p className="hero-desc anim-stagger-3">
+          <h1 className="hero-title anim-stagger-1">
+            Early Warning for
+            <br />
+            <span className="hero-prearrest-gradient">Pre-Arrest</span> Cardiac Signals
+          </h1>
+          <p className="hero-desc anim-stagger-2">
             Digitize standard ECG plots into clean 1D time-series, compute 90 non-linear Heart Rate Variability
             biomarkers, and detect pre-arrest patterns with tuned clinical sensitivity.
           </p>
@@ -277,160 +282,148 @@ export default function Home() {
           </div>
         )}
 
-        {/* Main Card */}
+        {/* Main Floating Apple Card */}
         <section className="apple-card anim-stagger-4">
-          {/* Quick Sample Traces */}
-          <div className="sample-strip">
-            <div className="sample-label">
-              <Pulse size={17} weight="bold" />
-              Quick Demo Traces:
+          {/* Quick Demo Traces Bar at Top of Card */}
+          <div className="card-top-strip">
+            <div className="strip-title">
+              <Pulse size={18} weight="bold" />
+              <span>Quick Demo Traces</span>
             </div>
-            <div className="sample-buttons">
+            <div className="strip-pills">
               <button
                 type="button"
-                className="btn-sample"
+                className={`pill-btn ${file?.name === "sample_ecg_180sec.png" ? "active" : ""}`}
                 onClick={() => handleLoadSample("sample_ecg_180sec.png", 180)}
                 title="Load a verified 180s Normal Sinus Rhythm recording"
               >
+                <Pulse size={16} weight="bold" />
                 <span>Normal Rhythm</span>
-                <span className="pill-tag">180s</span>
+                <span className="pill-badge">180s</span>
               </button>
               <button
                 type="button"
-                className="btn-sample"
+                className={`pill-btn ${file?.name === "sample_ecg_prearrest_130sec.png" ? "active" : ""}`}
                 onClick={() => handleLoadSample("sample_ecg_prearrest_130sec.png", 130)}
                 title="Load a verified 130s Pre-Arrest pattern recording"
               >
+                <Pulse size={16} weight="bold" />
                 <span>Pre-Arrest Pattern</span>
-                <span className="pill-tag">130s</span>
+                <span className="pill-badge">130s</span>
               </button>
             </div>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit}>
-            {/* Field: Image Upload */}
-            <div className="form-group">
-              <div className="field-header">
-                <label className="field-label" htmlFor="ecg_file_input">
-                  <ImageIcon size={18} weight="bold" />
-                  ECG Waveform Image
-                </label>
-                <span className="field-hint-inline">Tight crop on dark traces</span>
-              </div>
+          <form onSubmit={handleSubmit} className="card-form">
+            {/* Dropzone matching user mockup */}
+            <div
+              className={`dropzone-box ${isDragOver ? "is-dragover" : ""} ${file ? "has-file" : ""}`}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                id="ecg_file_input"
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleFileSelect(e.target.files[0]);
+                  }
+                }}
+              />
 
-              <div
-                className={`dropzone-container ${isDragOver ? "is-dragover" : ""}`}
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={onDrop}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input
-                  ref={fileInputRef}
-                  id="ecg_file_input"
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handleFileSelect(e.target.files[0]);
-                    }
-                  }}
-                />
-
-                {!file ? (
-                  <div>
-                    <div className="dropzone-icon">
-                      <UploadSimple size={26} weight="bold" />
-                    </div>
-                    <div className="dropzone-prompt">
-                      <span>Drop your ECG plot here</span> or click to browse
-                    </div>
-                    <p className="dropzone-sub">
-                      Clean screenshots of waveform plots work best. Exclude axis labels or titles for optimal 1D
-                      digitization fidelity.
-                    </p>
+              {!file ? (
+                <div className="dropzone-empty-state">
+                  <div className="dropzone-icon-badge">
+                    <UploadSimple size={24} weight="bold" />
                   </div>
-                ) : (
-                  <div className="file-preview" onClick={(e) => e.stopPropagation()}>
-                    {previewUrl && (
-                      <img src={previewUrl} alt="ECG preview thumbnail" className="preview-thumb" />
-                    )}
-                    <div className="preview-details">
-                      <div className="preview-name">{file.name}</div>
-                      <div className="preview-meta">{formatBytes(file.size)} • Ready to digitize</div>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-clear-file"
-                      onClick={handleClearFile}
-                      title="Remove file"
-                    >
-                      <X size={18} weight="bold" />
-                    </button>
+                  <div className="dropzone-text-row">
+                    <span className="drop-pink-text">Drop your ECG plot here</span>{" "}
+                    <span className="drop-slate-text">or click to browse</span>
                   </div>
-                )}
-              </div>
+                  <p className="dropzone-subtext">
+                    Supports PNG, JPG, JPEG • Max 10MB
+                  </p>
+                </div>
+              ) : (
+                <div className="file-preview-card" onClick={(e) => e.stopPropagation()}>
+                  {previewUrl && (
+                    <img src={previewUrl} alt="ECG preview thumbnail" className="preview-thumb" />
+                  )}
+                  <div className="preview-details">
+                    <div className="preview-name">{file.name}</div>
+                    <div className="preview-meta">{formatBytes(file.size)} • Ready to digitize</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-clear-file"
+                    onClick={handleClearFile}
+                    title="Remove file"
+                  >
+                    <X size={18} weight="bold" />
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Field: Duration */}
-            <div className="form-group">
-              <div className="field-header">
-                <label className="field-label" htmlFor="duration_input">
-                  <Clock size={18} weight="bold" />
-                  Duration in Waveform Image
-                </label>
-                <span className="field-hint-inline">Requires ~150 beats (2–3 min)</span>
+            {/* Duration Input & Action Strip */}
+            <div className="card-controls-row">
+              <div className="duration-col">
+                <div className="field-label-compact">
+                  <Clock size={16} weight="bold" />
+                  <span>Duration in Waveform Image</span>
+                </div>
+                <div className="duration-input-capsule">
+                  <input
+                    id="duration_input"
+                    type="number"
+                    min="5"
+                    max="3600"
+                    step="0.1"
+                    placeholder="180"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    required
+                  />
+                  <span className="capsule-unit">seconds</span>
+                </div>
+                <div className="duration-quick-pills">
+                  <button
+                    type="button"
+                    className={`quick-pill ${duration === "130" ? "active" : ""}`}
+                    onClick={() => setDuration("130")}
+                  >
+                    130s
+                  </button>
+                  <button
+                    type="button"
+                    className={`quick-pill ${duration === "180" ? "active" : ""}`}
+                    onClick={() => setDuration("180")}
+                  >
+                    180s
+                  </button>
+                  <button
+                    type="button"
+                    className={`quick-pill ${duration === "300" ? "active" : ""}`}
+                    onClick={() => setDuration("300")}
+                  >
+                    300s
+                  </button>
+                </div>
               </div>
 
-              <div className="input-wrapper">
-                <input
-                  id="duration_input"
-                  type="number"
-                  min="5"
-                  max="3600"
-                  step="0.1"
-                  placeholder="e.g. 180"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  required
-                />
-                <span className="input-unit">seconds</span>
-              </div>
-
-              {/* Presets */}
-              <div className="duration-presets">
-                <span className="duration-preset-label">Standard spans:</span>
-                <button
-                  type="button"
-                  className={`preset-pill ${duration === "130" ? "active" : ""}`}
-                  onClick={() => setDuration("130")}
-                >
-                  130s (2m 10s)
-                </button>
-                <button
-                  type="button"
-                  className={`preset-pill ${duration === "180" ? "active" : ""}`}
-                  onClick={() => setDuration("180")}
-                >
-                  180s (3m Standard)
-                </button>
-                <button
-                  type="button"
-                  className={`preset-pill ${duration === "300" ? "active" : ""}`}
-                  onClick={() => setDuration("300")}
-                >
-                  300s (5m Full Strip)
+              <div className="submit-col">
+                <button type="submit" className="btn-apple-eval" disabled={loading || !file}>
+                  <Heart size={20} weight="fill" />
+                  <span>{loading ? "Digitizing Waveform..." : "Digitize Waveform & Evaluate Risk"}</span>
                 </button>
               </div>
             </div>
-
-            {/* Submit */}
-            <button type="submit" className="btn-submit" disabled={loading || !file}>
-              <Heart size={20} weight="fill" />
-              <span>{loading ? "Digitizing Waveform..." : "Digitize Waveform & Evaluate Risk"}</span>
-            </button>
 
             {/* Dynamic Loading Bar */}
             {loading && (

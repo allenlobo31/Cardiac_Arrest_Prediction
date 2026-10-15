@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description:
     "Digitize standard ECG waveform plots into 1D time-series, extract 90 HRV physiological biomarkers, and detect pre-arrest cardiac patterns with high precision.",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/logo.png",
   },
 };
 
