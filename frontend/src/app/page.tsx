@@ -19,6 +19,8 @@ import {
   Sparkle,
   Gauge,
   ArrowsClockwise,
+  Sun,
+  Moon,
 } from "@phosphor-icons/react";
 
 interface PredictionResult {
@@ -31,6 +33,7 @@ interface PredictionResult {
 }
 
 export default function Home() {
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<string>("180");
@@ -43,6 +46,21 @@ export default function Home() {
   const [backendReady, setBackendReady] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize theme (defaults to Light Mode)
+  useEffect(() => {
+    const saved = localStorage.getItem("cardiopulse-theme") as "light" | "dark" | null;
+    const initialTheme = saved || "light";
+    setTheme(initialTheme);
+    document.documentElement.setAttribute("data-theme", initialTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    setTheme(nextTheme);
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    localStorage.setItem("cardiopulse-theme", nextTheme);
+  };
 
   // Check backend health on mount
   useEffect(() => {
@@ -189,11 +207,18 @@ export default function Home() {
 
   return (
     <>
-      {/* Top Apple Dark Mode Nav */}
+      {/* Floating Ambient Red / Rose Background Blobs */}
+      <div className="ambient-blobs-layer" aria-hidden="true">
+        <div className="ambient-blob blob-1"></div>
+        <div className="ambient-blob blob-2"></div>
+        <div className="ambient-blob blob-3"></div>
+      </div>
+
+      {/* Top Apple Nav Header */}
       <header className="top-nav">
         <div className="nav-container">
           <a href="#" className="brand-mark">
-            <div className="heart-logo">
+            <div className="heart-logo heart-beat-active">
               <Heartbeat size={22} weight="fill" />
             </div>
             <div className="brand-title">
@@ -201,11 +226,27 @@ export default function Home() {
             </div>
           </a>
 
-          <div className="nav-status">
-            <span className="status-dot"></span>
-            <span>
-              {backendReady ? "Engine Calibrated • RF 0.38 Cutoff" : "Connecting to Engine (Port 5000)"}
-            </span>
+          <div className="nav-right-cluster">
+            <div className="nav-status">
+              <span className="status-dot"></span>
+              <span>
+                {backendReady ? "Engine Calibrated • RF 0.38 Cutoff" : "Connecting to Engine (Port 5000)"}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="theme-toggle-btn"
+              onClick={toggleTheme}
+              title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
+              aria-label="Toggle light and dark mode"
+            >
+              {theme === "light" ? (
+                <Moon size={18} weight="bold" />
+              ) : (
+                <Sun size={18} weight="bold" />
+              )}
+            </button>
           </div>
         </div>
       </header>
@@ -214,12 +255,12 @@ export default function Home() {
       <main className="page-main">
         {/* Hero Section */}
         <section className="hero-section">
-          <div className="hero-eyebrow">
+          <div className="hero-eyebrow anim-stagger-1">
             <Sparkle size={14} weight="fill" />
             Biometric Signal Intelligence
           </div>
-          <h1 className="hero-title">Early Warning for Pre-Arrest Cardiac Signals</h1>
-          <p className="hero-desc">
+          <h1 className="hero-title anim-stagger-2">Early Warning for Pre-Arrest Cardiac Signals</h1>
+          <p className="hero-desc anim-stagger-3">
             Digitize standard ECG plots into clean 1D time-series, compute 90 non-linear Heart Rate Variability
             biomarkers, and detect pre-arrest patterns with tuned clinical sensitivity.
           </p>
@@ -227,7 +268,7 @@ export default function Home() {
 
         {/* Error Alert */}
         {error && (
-          <div className="error-card" role="alert">
+          <div className="error-card anim-stagger-3" role="alert">
             <WarningCircle size={22} weight="bold" />
             <div>
               <div className="error-card-title">Processing Notice</div>
@@ -237,7 +278,7 @@ export default function Home() {
         )}
 
         {/* Main Card */}
-        <section className="apple-card">
+        <section className="apple-card anim-stagger-4">
           {/* Quick Sample Traces */}
           <div className="sample-strip">
             <div className="sample-label">
@@ -556,7 +597,7 @@ export default function Home() {
         )}
 
         {/* Scientific Pipeline Bento Grid */}
-        <section className="pipeline-section">
+        <section className="pipeline-section anim-stagger-5">
           <div className="section-eyebrow">Scientific Architecture</div>
           <h2 className="section-heading">How the Predictive Pipeline Operates</h2>
 
