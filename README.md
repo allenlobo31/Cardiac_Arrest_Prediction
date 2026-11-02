@@ -2,7 +2,7 @@
 
 # Pre-Cardiac Arrest Prediction
 
-**ECG-derived HRV analysis with a local Flask prediction website**
+**ECG-derived HRV analysis with a Next.js frontend and Flask model API**
 
 The original pipeline extracts HRV features from annotated ECG records, trains a Random Forest classifier, and predicts whether an input is `Normal` or `Pre-arrest`.
 
@@ -44,9 +44,9 @@ flowchart TD
 
 ```text
 .
-|-- app.py                          # Original Flask application
+|-- app.py                          # Flask model API
 |-- requirements.txt                # Python dependencies
-|-- templates/index.html            # Website interface
+|-- frontend/                       # Next.js website and API proxy
 |-- src/
 |   |-- image_to_signal.py          # ECG plot image digitizer
 |   `-- raw_to_hrv_features.py      # HRV extraction and prediction helpers
@@ -230,13 +230,13 @@ These are results recorded in the stable notebook's held-out test split, not gua
 
 ## Website Architecture
 
-The website is a Flask application. Model artifacts are loaded once when `app.py` starts, then reused for each request.
+The Next.js frontend owns the website. Flask loads the model artifacts once when `app.py` starts and serves prediction requests locally.
 
 ```mermaid
 flowchart TD
-  A[Browser] -->|GET /| B[app.py Flask routes]
-  B --> C[templates/index.html]
-  C -->|POST /predict<br/>ECG image + duration| D[src/image_to_signal.py]
+  A[Browser] -->|GET /| B[frontend Next.js]
+  B -->|POST /api/predict| C[Flask app.py]
+  C -->|ECG image + duration| D[src/image_to_signal.py]
   D -->|1D signal| E[Sampling-rate validation]
   E --> F[NeuroKit2 ECG cleaning<br/>and R-peak detection]
   F --> G[src/raw_to_hrv_features.py]
@@ -244,8 +244,8 @@ flowchart TD
   H --> I[random_forest_prearrest.joblib]
   I --> J[chosen_threshold.json]
   J -->|Normal or Pre-arrest| C
-  B -->|GET /health| K[Readiness JSON]
-  B -->|POST /api/predict| L[JSON prediction route]
+  C -->|GET /health| K[Readiness JSON]
+  C -->|POST /api/predict| L[Raw JSON prediction route]
   L --> G
 ```
 
@@ -253,8 +253,8 @@ flowchart TD
 
 | Component | Responsibility |
 | --- | --- |
-| `app.py` | Creates the Flask server, loads artifacts, validates requests, calls the prediction pipeline, and formats HTML or JSON responses. |
-| `templates/index.html` | Displays the upload form, validation errors, prediction result, metrics, sanity plot, and limitation notice. |
+| `app.py` | Creates the Flask API, loads artifacts, validates requests, and calls the prediction pipeline. |
+| `frontend/` | Displays the upload form and prediction results, then proxies image predictions to Flask. |
 | `src/image_to_signal.py` | Converts a PNG/JPG ECG plot into one numeric signal value per image column using background contrast and interpolation. |
 | `src/raw_to_hrv_features.py` | Detects R-peaks from raw ECG when needed and calculates the ordered 90-feature NeuroKit2 HRV vector. |
 | `models/feature_scaler.pkl` | Applies the same feature scaling used during training. |
@@ -265,31 +265,39 @@ flowchart TD
 
 | Route | Method | Purpose |
 | --- | --- | --- |
-| `/` | `GET` | Renders the empty prediction form. |
-| `/predict` | `POST` | Accepts an ECG image and duration, runs the image prediction pipeline, and renders the result page. |
+| `/api/predict_image` | `POST` | Accepts an ECG image and duration, then returns a JSON prediction for Next.js. |
 | `/health` | `GET` | Reports whether the model, scaler, and threshold were loaded successfully. |
 | `/api/predict` | `POST` | Accepts JSON containing either `r_peaks` or `ecg_signal` plus `sampling_rate`, then returns a JSON prediction. |
 
 ### Image Request Lifecycle
 
-1. The browser submits the `ecg_image` file and `duration_seconds` to `/predict`.
-2. The image digitizer estimates the waveform and returns a one-dimensional signal.
-3. The server calculates `sampling_rate = image_width / duration_seconds` and checks the 50-2,000 Hz range.
-4. NeuroKit2 cleans the signal and detects R-peak sample positions.
-5. The 90 HRV features are generated in the exact order stored in `feature_columns.json`.
-6. The scaler transforms the feature row, and the Random Forest returns a probability.
-7. The probability is compared with the threshold loaded from `chosen_threshold.json`.
-8. The server renders the label, probability, beat count, sampling rate, and a base64 sanity plot with detected beats marked.
+1. The browser submits the `ecg_image` file and `duration_seconds` to Next.js `/api/predict`.
+2. Next.js forwards the multipart request to Flask `/api/predict_image`.
+3. The image digitizer estimates the waveform and returns a one-dimensional signal.
+4. The server calculates `sampling_rate = image_width / duration_seconds` and checks the 50-2,000 Hz range.
+5. NeuroKit2 cleans the signal and detects R-peak sample positions.
+6. The 90 HRV features are generated in the exact order stored in `feature_columns.json`.
+7. The scaler transforms the feature row, and the Random Forest returns a probability.
+8. The probability is compared with the threshold loaded from `chosen_threshold.json`.
+9. Flask returns the label, probability, beat count, sampling rate, and base64 sanity plot as JSON.
 
 ## Run The Website
 
-With the virtual environment active and the old model artifacts present:
+Start Flask with the virtual environment active and the model artifacts present:
 
 ```bash
 python app.py
 ```
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
+Then start Next.js in a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Next.js forwards image predictions to Flask at `http://127.0.0.1:5000`.
 
 At startup, `app.py` loads these files once:
 

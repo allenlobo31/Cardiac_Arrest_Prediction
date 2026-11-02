@@ -5,18 +5,15 @@ import {
   Heartbeat,
   Heart,
   UploadSimple,
-  Image as ImageIcon,
   WarningCircle,
   CheckCircle,
   Clock,
   Pulse,
   Cpu,
-  ArrowCounterClockwise,
   Printer,
   X,
   Waveform,
   ShieldCheck,
-  Sparkle,
   Gauge,
   ArrowsClockwise,
   Sun,
@@ -33,7 +30,10 @@ interface PredictionResult {
 }
 
 export default function Home() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "light";
+    return (localStorage.getItem("cardiopulse-theme") as "light" | "dark" | null) || "light";
+  });
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<string>("180");
@@ -43,17 +43,12 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PredictionResult | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
-  const [backendReady, setBackendReady] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize theme (defaults to Light Mode matching mockup)
   useEffect(() => {
-    const saved = localStorage.getItem("cardiopulse-theme") as "light" | "dark" | null;
-    const initialTheme = saved || "light";
-    setTheme(initialTheme);
-    document.documentElement.setAttribute("data-theme", initialTheme);
-  }, []);
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   const toggleTheme = () => {
     const nextTheme = theme === "light" ? "dark" : "light";
@@ -61,24 +56,6 @@ export default function Home() {
     document.documentElement.setAttribute("data-theme", nextTheme);
     localStorage.setItem("cardiopulse-theme", nextTheme);
   };
-
-  // Check backend health on mount
-  useEffect(() => {
-    async function checkHealth() {
-      try {
-        const res = await fetch("/api/backend/health");
-        if (res.ok) {
-          setBackendReady(true);
-        } else {
-          const directRes = await fetch("http://127.0.0.1:5000/health");
-          if (directRes.ok) setBackendReady(true);
-        }
-      } catch {
-        setBackendReady(false);
-      }
-    }
-    checkHealth();
-  }, []);
 
   // Format file size
   const formatBytes = (bytes?: number) => {

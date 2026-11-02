@@ -1,22 +1,21 @@
 """
-app.py — Flask web app for the HRV cardiac-arrest-warning model.
+app.py — Flask API for the HRV cardiac-arrest-warning model.
 
 Run locally:
     pip install -r requirements.txt
     python app.py
-    # then open http://127.0.0.1:5000 in your browser
+    # Next.js frontend: cd frontend && npm run dev
 
 WHAT THIS APP DOES
 -------------------
-1. Shows a web page with a form to upload an image of an ECG waveform plot
-   (a clean digital chart/screenshot — not a photo of paper).
+1. Accepts an image of an ECG waveform plot from the Next.js frontend
+    (a clean digital chart/screenshot — not a photo of paper).
 2. Digitizes that image into a 1D numeric signal (image_to_signal.py).
 3. Converts the signal into the 90 HRV features the model was trained on
    (raw_to_hrv_features.py — this runs neurokit2's R-peak detector).
 4. Scales the features and runs them through random_forest_prearrest.joblib.
-5. Shows the prediction (Normal / Pre-arrest) plus a sanity-check plot of
-   the digitized signal with detected heartbeats marked, so you can see
-   whether the digitization actually worked before trusting the result.
+5. Returns the prediction (Normal / Pre-arrest) plus a sanity-check plot
+    with detected heartbeats marked as JSON.
 
 IMPORTANT — read this before trusting a result:
 Turning a static image back into a signal is inherently a best-effort
@@ -26,10 +25,11 @@ rate) to compute reliable HRV features — a short strip will be rejected.
 See image_to_signal.py for the exact assumptions and how to get a cleaner
 result (crop tightly to the waveform, use a high-contrast trace color).
 
-This app also still exposes the original JSON API for programmatic use:
+The service exposes a JSON API for the Next.js frontend:
     GET  /health       -> confirms the model artifacts loaded correctly
-    POST /api/predict  -> same as before: send {"sampling_rate", "r_peaks"}
-                           or {"sampling_rate", "ecg_signal"} as JSON
+    POST /api/predict_image -> accepts an ECG image and duration as multipart form data
+    POST /api/predict  -> accepts {"sampling_rate", "r_peaks"} or
+                          {"sampling_rate", "ecg_signal"} as JSON
 """
 
 import base64
@@ -41,14 +41,13 @@ import matplotlib
 matplotlib.use("Agg")  # no display backend needed on a server
 import matplotlib.pyplot as plt
 import numpy as np
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, request
 
 from src.image_to_signal import image_to_ecg_signal
 from src.raw_to_hrv_features import ecg_signal_to_features, r_peaks_to_features
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload limit
-app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
@@ -134,7 +133,7 @@ def _make_sanity_plot(cleaned_signal, r_peak_samples, sampling_rate):
 
 def _run_prediction_pipeline(ecg_signal, sampling_rate):
     """Shared core: signal + sampling_rate -> features -> scaled -> prediction.
-    Returns a dict ready to hand to the template, or raises ValueError with a
+    Returns a JSON-serializable dict, or raises ValueError with a
     human-readable message on bad/unusable input (too few beats, etc.)."""
     features, cleaned, r_peaks = ecg_signal_to_features(
         ecg_signal, sampling_rate, FEATURE_COLUMNS_PATH, return_peaks=True
@@ -152,66 +151,6 @@ def _run_prediction_pipeline(ecg_signal, sampling_rate):
         "sampling_rate_used": round(sampling_rate, 2),
         "plot_uri": plot_uri,
     }
-
-
-@app.route("/", methods=["GET"])
-def index():
-    return render_template("index.html", result=None, error=None)
-
-
-@app.route("/predict", methods=["POST"])
-def predict_from_image():
-    """Web-form endpoint: image upload + duration -> digitize -> predict."""
-    if _model is None:
-        return render_template("index.html", result=None,
-                                error="Model not loaded — check server startup logs.")
-
-    image_file = request.files.get("ecg_image")
-    duration_raw = request.form.get("duration_seconds", "").strip()
-
-    if image_file is None or image_file.filename == "":
-        return render_template("index.html", result=None,
-                                error="Please choose an image file to upload.")
-
-    try:
-        duration_seconds = float(duration_raw)
-    except ValueError:
-        return render_template("index.html", result=None,
-                                error="'Duration (seconds)' must be a number — "
-                                      "enter how many seconds of ECG the image spans.")
-
-    if not (MIN_DURATION_SECONDS <= duration_seconds <= MAX_DURATION_SECONDS):
-        return render_template("index.html", result=None,
-                                error=f"Duration looks implausible ({duration_seconds}s). "
-                                      f"Expected between {MIN_DURATION_SECONDS} and "
-                                      f"{MAX_DURATION_SECONDS} seconds.")
-
-    try:
-        image_bytes = image_file.read()
-        ecg_signal = image_to_ecg_signal(image_bytes)
-
-        sampling_rate = len(ecg_signal) / duration_seconds
-        if not (MIN_SAMPLING_RATE <= sampling_rate <= MAX_SAMPLING_RATE):
-            return render_template(
-                "index.html", result=None,
-                error=(f"The implied sampling rate ({sampling_rate:.1f} Hz, from "
-                       f"{len(ecg_signal)} pixel columns over {duration_seconds}s) is "
-                       f"outside a plausible range ({MIN_SAMPLING_RATE}-{MAX_SAMPLING_RATE} Hz). "
-                       f"Double-check the duration you entered, or use a wider/narrower image.")
-            )
-
-        result = _run_prediction_pipeline(ecg_signal, sampling_rate)
-        return render_template("index.html", result=result, error=None)
-
-    except ValueError as e:
-        # raised by image_to_signal.py or raw_to_hrv_features.py for things
-        # like "no trace detected" or "too few beats" — bad input, not a bug
-        return render_template("index.html", result=None, error=str(e))
-    except Exception:
-        app.logger.exception("Unexpected error during image-based prediction")
-        return render_template("index.html", result=None,
-                                error="Something went wrong processing that image. "
-                                      "Check the server logs for details.")
 
 
 @app.after_request
