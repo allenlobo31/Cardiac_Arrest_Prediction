@@ -1,19 +1,16 @@
 """
 raw_to_hrv_features.py
 
-Converts raw heartbeat data into the exact 90-feature HRV vector that
-random_forest_prearrest.joblib expects, in the exact column order feature_columns.json
-specifies. Two entry points depending on what raw data you have:
+Converts raw heartbeat data into the 7-feature HRV vector that
+arrest_model.joblib expects. Two entry points depending on what raw data you have:
 
     - r_peaks_to_features()  : you already have R-peak locations
     - ecg_signal_to_features(): you only have a raw ECG waveform (peaks get
                                  detected for you)
 
-Both return a single-row pandas DataFrame ready for scaler.transform() and
-model.predict_proba().
+Both return a single-row pandas DataFrame ready for model.predict_proba().
 """
 
-import json
 import os
 import numpy as np
 import pandas as pd
@@ -21,22 +18,19 @@ import neurokit2 as nk
 
 MIN_BEATS_REQUIRED = 150  # matches MIN_BEATS_PER_WINDOW used when the training data was built
 
-_DEFAULT_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
-_DEFAULT_FEATURE_COLUMNS = os.path.join(_DEFAULT_MODELS_DIR, "feature_columns.json")
-_DEFAULT_MODEL = os.path.join(_DEFAULT_MODELS_DIR, "random_forest_prearrest.joblib")
-_DEFAULT_SCALER = os.path.join(_DEFAULT_MODELS_DIR, "feature_scaler.pkl")
-_DEFAULT_THRESHOLD = os.path.join(_DEFAULT_MODELS_DIR, "chosen_threshold.json")
+_DEFAULT_MODEL = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "train", "arrest_model.joblib"
+)
+ARREST_FEATURES = ["mean_rr", "sdnn", "rmssd", "pnn50", "sd1", "sd2", "sd1_sd2"]
 
 
-def r_peaks_to_features(r_peak_samples, sampling_rate, feature_columns_path=_DEFAULT_FEATURE_COLUMNS):
+def r_peaks_to_features(r_peak_samples, sampling_rate, feature_columns_path=None):
     """
     r_peak_samples : array-like of R-peak locations, in SAMPLES (not seconds).
                       e.g. if your peaks are in seconds, multiply by sampling_rate first.
     sampling_rate  : the sampling rate (Hz) those peak locations were measured at.
-    feature_columns_path : path to the feature_columns.json saved alongside the trained model.
-
-    Returns a single-row pandas DataFrame with the 90 HRV feature columns,
-    in the correct order, ready for scaler.transform().
+    Returns a single-row pandas DataFrame with the 7 HRV feature columns used
+    by train/train.py, in the correct order.
     """
     r_peak_samples = np.asarray(r_peak_samples)
 
@@ -47,27 +41,26 @@ def r_peaks_to_features(r_peak_samples, sampling_rate, feature_columns_path=_DEF
             f"training data was built). Use a longer recording window."
         )
 
-    with open(feature_columns_path) as f:
-        keep_cols = json.load(f)
+    rr = np.diff(r_peak_samples) / sampling_rate
+    rr = rr[(rr > 0.3) & (rr < 2.0)]
+    if len(rr) < MIN_BEATS_REQUIRED - 1:
+        raise ValueError("Too few valid RR intervals for reliable HRV computation.")
+    rr = rr[np.abs(rr / np.median(rr) - 1) < 0.3]
+    differences = np.diff(rr)
+    sd1 = np.std(differences) / np.sqrt(2)
+    sd2 = np.sqrt(max(2 * np.var(rr) - sd1 ** 2, 0))
+    values = [
+        rr.mean(), rr.std(), np.sqrt(np.mean(differences ** 2)),
+        np.mean(np.abs(differences) > 0.05), sd1, sd2, sd1 / (sd2 + 1e-9),
+    ]
+    return pd.DataFrame([values], columns=ARREST_FEATURES)
 
-    hrv_df = nk.hrv(r_peak_samples, sampling_rate=sampling_rate, show=False)
 
-    missing = [c for c in keep_cols if c not in hrv_df.columns]
-    if missing:
-        raise ValueError(
-            f"neurokit2 did not produce {len(missing)} of the expected features "
-            f"(commonly happens with short/irregular windows): {missing}"
-        )
-
-    return hrv_df[keep_cols].reset_index(drop=True)
-
-
-def ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path=_DEFAULT_FEATURE_COLUMNS,
+def ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path=None,
                             return_peaks=False):
     """
     ecg_signal     : 1D array-like of raw ECG voltage samples.
     sampling_rate  : the sampling rate (Hz) of ecg_signal.
-    feature_columns_path : path to the feature_columns.json saved alongside the trained model.
     return_peaks   : if True, also returns (cleaned_signal, r_peak_samples) so callers
                       (e.g. the web UI) can plot the detected beats for a sanity check.
 
@@ -88,13 +81,9 @@ def ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path=_DEFA
 
 
 def predict_from_raw(r_peak_samples=None, ecg_signal=None, sampling_rate=None,
-                      model_path=_DEFAULT_MODEL, scaler_path=_DEFAULT_SCALER,
-                      feature_columns_path=_DEFAULT_FEATURE_COLUMNS,
-                      threshold_path=_DEFAULT_THRESHOLD):
-    """
-    Full end-to-end: raw R-peaks OR raw ECG signal -> HRV features -> scaled ->
-    model prediction. Pass exactly one of r_peak_samples / ecg_signal.
-    """
+                      model_path=_DEFAULT_MODEL, scaler_path=None,
+                      feature_columns_path=None, threshold_path=None):
+    """Full end-to-end prediction using raw R-peaks or an ECG signal."""
     import joblib
 
     if sampling_rate is None:
@@ -107,13 +96,11 @@ def predict_from_raw(r_peak_samples=None, ecg_signal=None, sampling_rate=None,
     else:
         features = ecg_signal_to_features(ecg_signal, sampling_rate, feature_columns_path)
 
-    scaler = joblib.load(scaler_path)
-    model = joblib.load(model_path)
-    with open(threshold_path) as f:
-        threshold = json.load(f)["threshold"]
-
-    features_scaled = scaler.transform(features)
-    proba = model.predict_proba(features_scaled)[0, 1]
+    artifact = joblib.load(model_path)
+    model = artifact["model"]
+    threshold = 1.0 - artifact["threshold"]
+    raw_proba = model.predict_proba(features[artifact["features"]])[0, 1]
+    proba = 1.0 - raw_proba
     label = "Pre-arrest" if proba >= threshold else "Normal"
 
     return {"label": label, "probability": float(proba), "threshold_used": threshold}

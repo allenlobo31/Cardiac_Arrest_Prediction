@@ -34,7 +34,6 @@ The service exposes a JSON API for the Next.js frontend:
 
 import base64
 import io
-import json
 import os
 
 import matplotlib
@@ -50,11 +49,7 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload limit
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(BASE_DIR, "models")
-MODEL_PATH = os.path.join(MODELS_DIR, "random_forest_prearrest.joblib")
-SCALER_PATH = os.path.join(MODELS_DIR, "feature_scaler.pkl")
-FEATURE_COLUMNS_PATH = os.path.join(MODELS_DIR, "feature_columns.json")
-THRESHOLD_PATH = os.path.join(MODELS_DIR, "chosen_threshold.json")
+MODEL_PATH = os.path.join(BASE_DIR, "train", "arrest_model.joblib")
 
 MIN_SAMPLING_RATE = 50    # sanity bound — implausibly low for ECG/PPG
 MAX_SAMPLING_RATE = 2000  # sanity bound — implausibly high for a wearable
@@ -64,8 +59,8 @@ MAX_DURATION_SECONDS = 3600  # 1 hour
 # Model artifacts are loaded once at startup, not per-request — loading a
 # pickle on every call would be slow and pointless since nothing in it changes.
 _model = None
-_scaler = None
 _threshold = None
+_feature_columns = None
 _threshold_model_name = None
 
 
@@ -73,25 +68,16 @@ def load_artifacts():
     """Loads the trained model, scaler, and threshold once at process startup.
     Raises immediately (rather than failing silently later) if any file is
     missing, so a misconfigured deployment fails fast and loudly."""
-    global _model, _scaler, _threshold, _threshold_model_name
+    global _model, _threshold, _feature_columns, _threshold_model_name
     import joblib
 
-    for path, name in [(MODEL_PATH, "random_forest_prearrest.joblib"),
-                        (SCALER_PATH, "feature_scaler.pkl"),
-                        (FEATURE_COLUMNS_PATH, "feature_columns.json"),
-                        (THRESHOLD_PATH, "chosen_threshold.json")]:
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                f"Required model artifact '{name}' not found at {path}. "
-                f"Make sure it's in the 'models' folder."
-            )
-
-    _model = joblib.load(MODEL_PATH)
-    _scaler = joblib.load(SCALER_PATH)
-    with open(THRESHOLD_PATH) as f:
-        threshold_info = json.load(f)
-    _threshold = threshold_info["threshold"]
-    _threshold_model_name = threshold_info.get("model_name", "unknown")
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"Required model artifact not found at {MODEL_PATH}.")
+    artifact = joblib.load(MODEL_PATH)
+    _model = artifact["model"]
+    _threshold = 1.0 - artifact["threshold"]
+    _feature_columns = artifact["features"]
+    _threshold_model_name = os.path.basename(MODEL_PATH)
 
 
 def _make_sanity_plot(cleaned_signal, r_peak_samples, sampling_rate):
@@ -136,10 +122,10 @@ def _run_prediction_pipeline(ecg_signal, sampling_rate):
     Returns a JSON-serializable dict, or raises ValueError with a
     human-readable message on bad/unusable input (too few beats, etc.)."""
     features, cleaned, r_peaks = ecg_signal_to_features(
-        ecg_signal, sampling_rate, FEATURE_COLUMNS_PATH, return_peaks=True
+        ecg_signal, sampling_rate, return_peaks=True
     )
-    features_scaled = _scaler.transform(features)
-    proba = float(_model.predict_proba(features_scaled)[0, 1])
+    raw_proba = float(_model.predict_proba(features[_feature_columns])[0, 1])
+    proba = 1.0 - raw_proba
     label = "Pre-arrest" if proba >= _threshold else "Normal"
     plot_uri = _make_sanity_plot(cleaned, r_peaks, sampling_rate)
 
@@ -210,7 +196,7 @@ def health():
     """Simple readiness check — confirms the model artifacts are loaded and
     the service is actually ready to serve predictions, not just that the
     process is running."""
-    ok = _model is not None and _scaler is not None and _threshold is not None
+    ok = _model is not None and _threshold is not None and _feature_columns is not None
     return jsonify({
         "status": "ok" if ok else "not_ready",
         "model_name": _threshold_model_name,
@@ -255,17 +241,17 @@ def api_predict():
             if not isinstance(r_peaks, list) or len(r_peaks) == 0:
                 return jsonify({"error": "'r_peaks' must be a non-empty list of sample indices."}), 400
             r_peaks_arr = np.asarray(r_peaks, dtype=float)
-            features = r_peaks_to_features(r_peaks_arr, sampling_rate, FEATURE_COLUMNS_PATH)
+            features = r_peaks_to_features(r_peaks_arr, sampling_rate)
             beats_detected = len(r_peaks_arr)
         else:
             if not isinstance(ecg_signal, list) or len(ecg_signal) == 0:
                 return jsonify({"error": "'ecg_signal' must be a non-empty list of numeric samples."}), 400
             ecg_arr = np.asarray(ecg_signal, dtype=float)
-            features = ecg_signal_to_features(ecg_arr, sampling_rate, FEATURE_COLUMNS_PATH)
+            features = ecg_signal_to_features(ecg_arr, sampling_rate)
             beats_detected = None
 
-        features_scaled = _scaler.transform(features)
-        proba = float(_model.predict_proba(features_scaled)[0, 1])
+        raw_proba = float(_model.predict_proba(features[_feature_columns])[0, 1])
+        proba = 1.0 - raw_proba
         label = "Pre-arrest" if proba >= _threshold else "Normal"
 
         response = {

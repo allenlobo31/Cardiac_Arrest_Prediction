@@ -16,6 +16,18 @@ ENV/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
+# Generated training data and plots
+models/
+train/data/
+train/ecg_waveforms.png
+data/raw/
+data/processed/
+data/samples/
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/.next/
+
 # IDE / Editor folders
 .vscode/
 .idea/
