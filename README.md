@@ -11,7 +11,7 @@ Features: `mean_rr`, `sdnn`, `rmssd`, `pnn50`, `sd1`, `sd2`, `sd1_sd2`.
 | Metric | Result |
 | --- | ---: |
 | AUROC | 0.887 |
-| Best training threshold | 0.490 |
+| Best training threshold | 0.421 |
 | Accuracy | 0.844 |
 | Sensitivity | 0.853 |
 | Specificity | 0.833 |
@@ -41,7 +41,15 @@ flowchart TD
 6. `src/raw_to_hrv_features.py` calculates the seven RR-based HRV features. At least 150 beats are required.
 7. The Random Forest produces a risk score. Flask returns `Normal` or `Pre-arrest`, the score, threshold, detected beat count, sampling rate, and a base64 sanity plot with detected peaks.
 
-The runtime complements the artifact class-1 score for the website's calibrated display, so the displayed cutoff is `0.510` (`1 - 0.490`). The API and frontend use this same score and cutoff consistently.
+The latest artifact's raw score is opposite to the labels of the supplied website demo traces, so the runtime complements it for display calibration. The effective website score is `1 - raw_probability`, and the displayed cutoff is `0.579` (`1 - 0.421`). The API and frontend use this calibrated score consistently.
+
+The readiness endpoint should report the effective runtime threshold:
+
+```json
+{"model_name":"arrest_model.joblib","status":"ok","threshold":0.579}
+```
+
+With the supplied demo traces, `sample_ecg_180sec.png` should display `Normal` and `sample_ecg_prearrest_130sec.png` should display `Pre-arrest`.
 
 ## Repository Layout
 
